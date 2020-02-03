@@ -76,22 +76,26 @@ let read st ic =
   (* I/O errors are dealt with at a higher level *)
   let fp1 = Digest.input ic in
   let fp2 = Digest.input ic in
-  let headerSize = Marshal.header_size in
+  let headerSize = 8 in
   let header = Bytes.create headerSize in
   really_input ic header 0 headerSize;
   if fp1 <> Digest.string header then begin
     debug (fun () -> Util.msg "bad header checksum\n");
     raise End_of_file
   end;
-  let dataSize = Marshal.data_size header 0 in
-  let s = Bytes.create (headerSize + dataSize) in
-  String.blit header 0 s 0 headerSize;
-  really_input ic s headerSize dataSize;
+  let dataSize = Protobuf.Decoder.(decode_exn bits64 header) in
+  if dataSize > Int64.of_int max_int then begin
+    debug (fun () -> Util.msg "data size too big\n");
+    raise End_of_file
+  end;
+  let dataSize = Int64.to_int dataSize in
+  let s = Bytes.create dataSize in
+  really_input ic s 0 dataSize;
   if fp2 <> Digest.string s then begin
     debug (fun () -> Util.msg "bad chunk checksum\n");
     raise End_of_file
   end;
-  let q : entry list = Marshal.from_string s 0 in
+  let q = Protobuf.Decoder.decode_exn entry_list_from_protobuf s in
   debug (fun () -> Util.msg "read chunk of %d files\n" (List.length q));
   List.iter (fun (l, p, i) -> PathTbl.add tbl (decompress st l p) i) q
 
@@ -104,11 +108,13 @@ let closeOut st =
 
 let write state =
   let q = Safelist.rev state.queue in
-  let s = Marshal.to_string q [Marshal.No_sharing] in
-  let fp1 = Digest.substring s 0 Marshal.header_size in
-  let fp2 = Digest.string s in
+  let s = Protobuf.Encoder.encode_exn entry_list_to_protobuf q in
+  let header = Protobuf.Encoder.(encode_exn bits64 (Int64.of_int (Bytes.length s))) in
+  let fp1 = Digest.bytes header in
+  let fp2 = Digest.bytes s in
   begin try
     Digest.output state.oc fp1; Digest.output state.oc fp2;
+    output_bytes state.oc header;
     output_string state.oc s; flush state.oc
   with Sys_error error ->
     debug (fun () -> Util.msg "error in writing to cache file: %s\n" error);
