@@ -60,21 +60,21 @@ let intSize = 5
 let intHash x = ((x * 791538121) lsr 23 + 17) land 255
 
 let encodeInt m =
-  let int_buf = Bytearray.create intSize in
-  int_buf.{0} <- Char.chr ( m         land 0xff);
-  int_buf.{1} <- Char.chr ((m lsr 8)  land 0xff);
-  int_buf.{2} <- Char.chr ((m lsr 16) land 0xff);
-  int_buf.{3} <- Char.chr ((m lsr 24) land 0xff);
-  int_buf.{4} <- Char.chr (intHash m);
+  let int_buf = Bytes.create intSize in
+  Bytes.set int_buf 0 (Char.chr ( m         land 0xff));
+  Bytes.set int_buf 1 (Char.chr ((m lsr 8)  land 0xff));
+  Bytes.set int_buf 2 (Char.chr ((m lsr 16) land 0xff));
+  Bytes.set int_buf 3 (Char.chr ((m lsr 24) land 0xff));
+  Bytes.set int_buf 4 (Char.chr (intHash m));
   (int_buf, 0, intSize)
 
 let decodeInt int_buf i =
-  let b0 = Char.code (int_buf.{i + 0}) in
-  let b1 = Char.code (int_buf.{i + 1}) in
-  let b2 = Char.code (int_buf.{i + 2}) in
-  let b3 = Char.code (int_buf.{i + 3}) in
+  let b0 = Char.code (Bytes.get int_buf (i + 0)) in
+  let b1 = Char.code (Bytes.get int_buf (i + 1)) in
+  let b2 = Char.code (Bytes.get int_buf (i + 2)) in
+  let b3 = Char.code (Bytes.get int_buf (i + 3)) in
   let m = (b3 lsl 24) lor (b2 lsl 16) lor (b1 lsl 8) lor b0 in
-  if Char.code (int_buf.{i + 4}) <> intHash m then
+  if Char.code (Bytes.get int_buf (i + 4)) <> intHash m then
     raise (Util.Fatal
              "Protocol error: corrupted message received;\n\
               if it happens to you in a repeatable way, \n\
@@ -157,7 +157,7 @@ let rec grabRec conn s pos len =
     grabRec conn s pos len
   end else begin
     let l = min (len - pos) conn.length in
-    Bytearray.blit_from_string conn.buffer 0 s pos l;
+    Bytes.blit conn.buffer 0 s pos l;
     conn.length <- conn.length - l;
     if conn.length > 0 then
       String.blit conn.buffer l conn.buffer 0 conn.length;
@@ -169,7 +169,7 @@ let rec grabRec conn s pos len =
 
 let grab conn s len =
   assert (len > 0);
-  assert (Bytearray.length s <= len);
+  assert (Bytes.length s <= len);
   grabRec conn s 0 len
 
 let peekWithoutBlocking conn =
@@ -203,7 +203,7 @@ let rec fillBuffer2 conn s pos len =
     fillBuffer2 conn s pos len
   else begin
     let l = min (len - pos) (bufferSize - conn.length) in
-    Bytearray.blit_to_string s pos conn.buffer conn.length l;
+    Bytes.blit s pos conn.buffer conn.length l;
     conn.length <- conn.length + l;
     if pos + l < len then
       fillBuffer2 conn s (pos + l) len
@@ -216,7 +216,7 @@ let rec fillBuffer conn l =
     (s, pos, len) :: rem ->
       assert (pos >= 0);
       assert (len >= 0);
-      assert (pos <= Bytearray.length s - len);
+      assert (pos <= Bytes.length s - len);
       fillBuffer2 conn s pos len >>= fun () ->
       fillBuffer conn rem
   | [] ->
@@ -396,11 +396,11 @@ end
 (*                              MARSHALING                                   *)
 (*****************************************************************************)
 
-type tag = Bytearray.t
+type tag = bytes
 
 type 'a marshalFunction =
-  'a -> (Bytearray.t * int * int) list -> (Bytearray.t * int * int) list
-type 'a unmarshalFunction = Bytearray.t -> 'a
+  'a -> (bytes * int * int) list -> (bytes * int * int) list
+type 'a unmarshalFunction = bytes -> 'a
 type 'a marshalingFunctions = 'a marshalFunction * 'a unmarshalFunction
 
 let registeredSet = ref Util.StringSet.empty
@@ -411,47 +411,57 @@ let rec first_chars len msg =
       ""
   | (s, p, l) :: rem ->
       if l < len then
-        Bytearray.sub s p l ^ first_chars (len - l) rem
+        Bytes.sub s p l ^ first_chars (len - l) rem
       else
-        Bytearray.sub s p len
+        Bytes.sub s p len
 
 let safeMarshal marshalPayload tag data rem =
   let (rem', length) = marshalPayload data rem in
-  let l = Bytearray.length tag in
+  let l = Bytes.length tag in
   debugE (fun() ->
             let start = first_chars (min length 10) rem' in
             let start = if length > 10 then start ^ "..." else start in
             let start = String.escaped start in
             Util.msg "send [%s] '%s' %d bytes\n"
-              (Bytearray.to_string tag) start length);
+              (Bytes.to_string tag) start length);
   (encodeInt (l + length) :: (tag, 0, l) :: rem')
 
+let rec bytes_prefix_rec a i a' i' l =
+  l = 0 ||
+  (Bytes.get a i = Bytes.get a' i' && bytes_prefix_rec a (i + 1) a' (i' + 1) (l - 1))
+
+let bytes_prefix a a' i =
+  let l = Bytes.length a in
+  let l' = Bytes.length a' in
+  i <= l' - l &&
+  bytes_prefix_rec a 0 a' i l
+
 let safeUnmarshal unmarshalPayload tag buf =
-  let taglength = Bytearray.length tag in
-  if Bytearray.prefix tag buf 0 then
+  let taglength = Bytes.length tag in
+  if bytes_prefix tag buf 0 then
     unmarshalPayload buf taglength
   else
     let identifier =
       String.escaped
-        (Bytearray.sub buf 0 (min taglength (Bytearray.length buf))) in
+        (Bytes.sub buf 0 (min taglength (Bytes.length buf))) in
     raise (Util.Fatal
              (Printf.sprintf "[safeUnmarshal] expected '%s' but got '%s'"
-                (String.escaped (Bytearray.to_string tag)) identifier))
+                (String.escaped (Bytes.to_string tag)) identifier))
 
 let registerTag string =
   if Util.StringSet.mem string !registeredSet then
     raise (Util.Fatal (Printf.sprintf "tag %s is already registered" string))
   else
     registeredSet := Util.StringSet.add string !registeredSet;
-  Bytearray.of_string string
+  Bytes.of_string string
 
 let defaultMarshalingFunctions =
   (fun data rem ->
-     let s = Bytearray.marshal data [Marshal.No_sharing] in
-     let l = Bytearray.length s in
+     let s = Marshal.to_bytes data [Marshal.No_sharing] in
+     let l = Bytes.length s in
      ((s, 0, l) :: rem, l)),
   (fun buf pos ->
-      try Bytearray.unmarshal buf pos
+      try Marshal.from_bytes buf pos
       with Failure s -> raise (Util.Fatal (Printf.sprintf 
 "Fatal error during unmarshaling (%s),
 possibly because client and server have been compiled with different\
@@ -585,28 +595,28 @@ two switch roles.)
 
 let receivePacket conn =
   (* Get the length of the packet *)
-  let int_buf = Bytearray.create intSize in
+  let int_buf = Bytes.create intSize in
   grab conn.inputBuffer int_buf intSize >>= (fun () ->
   let length = decodeInt int_buf 0 in
   assert (length >= 0);
   (* Get packet *)
-  let buf = Bytearray.create length in
+  let buf = Bytes.create length in
   grab conn.inputBuffer buf length >>= (fun () ->
   (debugE (fun () ->
              let start =
-               if length > 10 then (Bytearray.sub buf 0 10) ^ "..."
-               else Bytearray.sub buf 0 length in
+               if length > 10 then (Bytes.sub buf 0 10) ^ "..."
+               else Bytes.sub buf 0 length in
              let start = String.escaped start in
              Util.msg "receive '%s' %d bytes\n" start length);
    Lwt.return buf)))
 
 type servercmd =
-  connection -> Bytearray.t ->
-  ((Bytearray.t * int * int) list -> (Bytearray.t * int * int) list) Lwt.t
+  connection -> bytes ->
+  ((bytes * int * int) list -> (bytes * int * int) list) Lwt.t
 let serverCmds = ref (Util.StringMap.empty : servercmd Util.StringMap.t)
 
 type serverstream =
-  connection -> Bytearray.t -> unit
+  connection -> bytes -> unit
 let serverStreams = ref (Util.StringMap.empty : serverstream Util.StringMap.t)
 
 type header =
@@ -695,7 +705,7 @@ let rec receive conn =
   begin
     debugE (fun () -> Util.msg "Waiting for next message\n");
     (* Get the message ID *)
-    let id = Bytearray.create intSize in
+    let id = Bytes.create intSize in
     grab conn.inputBuffer id intSize >>= (fun () ->
     let num_id = decodeInt id 0 in
     if num_id = 0 then begin
@@ -940,9 +950,9 @@ let rec checkHeader conn buffer pos len =
     Lwt.return ()
   else begin
     (grab conn.inputBuffer buffer 1 >>= (fun () ->
-    if buffer.{0} <> connectionHeader.[pos] then
+    if Bytes.get buffer 0 <> connectionHeader.[pos] then
       let prefix =
-        String.sub connectionHeader 0 pos ^ Bytearray.to_string buffer in
+        String.sub connectionHeader 0 pos ^ Bytes.to_string buffer in
       let rest = peekWithoutBlocking conn.inputBuffer in
       Lwt.fail
         (Util.Fatal
@@ -1001,7 +1011,7 @@ let negociateFlowControl conn =
 let initConnection in_ch out_ch =
   let conn = setupIO false in_ch out_ch in
   checkHeader
-    conn (Bytearray.create 1) 0 (String.length connectionHeader) >>= (fun () ->
+    conn (Bytes.create 1) 0 (String.length connectionHeader) >>= (fun () ->
   Lwt.ignore_result (receive conn);
   negociateFlowControl conn;
   Lwt.return conn)
@@ -1416,7 +1426,7 @@ let commandLoop in_ch out_ch =
   let conn = setupIO true in_ch out_ch in
   Lwt.catch
     (fun e ->
-       dump conn [(Bytearray.of_string connectionHeader, 0,
+       dump conn [(Bytes.of_string connectionHeader, 0,
                    String.length connectionHeader)]
          >>= (fun () ->
        (* Set the local warning printer to make an RPC to the client and

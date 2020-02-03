@@ -412,7 +412,7 @@ let marshalTransferInstruction =
      (Remote.encodeInt file_id :: (data, pos, len) :: rem,
       len + Remote.intSize)),
   (fun buf pos ->
-     let len = Bytearray.length buf - pos - Remote.intSize in
+     let len = Bytes.length buf - pos - Remote.intSize in
      (Remote.decodeInt buf pos, (buf, pos + Remote.intSize, len)))
 
 let streamTransferInstruction =

@@ -88,8 +88,8 @@ val connectionToRoot : Common.root -> connection
 val registerServerCmd :
   string -> (connection -> 'a -> 'b Lwt.t) -> connection -> 'a -> 'b Lwt.t
 val intSize : int
-val encodeInt : int -> Bytearray.t * int * int
-val decodeInt : Bytearray.t -> int -> int
+val encodeInt : int -> bytes * int * int
+val decodeInt : bytes -> int -> int
 val registerRootCmdWithConnection :
     string                          (* command name *)
  -> (connection -> 'a -> 'b Lwt.t)  (* local command *)
@@ -103,7 +103,7 @@ val streamingActivated : bool Prefs.t
 val registerStreamCmd :
   string ->
   ('a ->
-   (Bytearray.t * int * int) list -> (Bytearray.t * int * int) list * int) *
-  (Bytearray.t -> int -> 'a) ->
+   (bytes * int * int) list -> (bytes * int * int) list * int) *
+  (bytes -> int -> 'a) ->
   (connection -> 'a -> unit) ->
   connection -> (('a -> unit Lwt.t) -> 'b Lwt.t) -> 'b Lwt.t

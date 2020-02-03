@@ -56,7 +56,7 @@ let debugLog =   Trace.debug "rsynclog"
 
 open Lwt
 
-type transfer_instruction = Bytearray.t * int * int
+type transfer_instruction = bytes * int * int
 
 type transmitter = transfer_instruction -> unit Lwt.t
 
@@ -101,7 +101,7 @@ let minBlockSize = 700
 let queueSize = 65500
 let queueSizeFS = Uutil.Filesize.ofInt queueSize
 type tokenQueue =
-  { mutable data : Bytearray.t;  (* the queued tokens *)
+  { mutable data : bytes;  (* the queued tokens *)
     mutable previous : [`Str of int | `Block of int | `None];
                                  (* some information about the
                                     previous token *)
@@ -111,29 +111,29 @@ type tokenQueue =
 
 let encodeInt3 s pos i =
   assert (i >= 0 && i < 256 * 256 * 256);
-  s.{pos + 0} <- Char.chr ((i lsr 0) land 0xff);
-  s.{pos + 1} <- Char.chr ((i lsr 8) land 0xff);
-  s.{pos + 2} <- Char.chr ((i lsr 16) land 0xff)
+  Bytes.set s (pos + 0) (Char.chr ((i lsr 0) land 0xff));
+  Bytes.set s (pos + 1) (Char.chr ((i lsr 8) land 0xff));
+  Bytes.set s (pos + 2) (Char.chr ((i lsr 16) land 0xff))
 
 let decodeInt3 s pos =
-  (Char.code s.{pos + 0} lsl 0) lor
-  (Char.code s.{pos + 1} lsl 8) lor
-  (Char.code s.{pos + 2} lsl 16)
+  (Char.code (Bytes.get s (pos + 0)) lsl 0) lor
+  (Char.code (Bytes.get s (pos + 1)) lsl 8) lor
+  (Char.code (Bytes.get s (pos + 2)) lsl 16)
 
 let encodeInt2 s pos i =
   assert (i >= 0 && i < 65536);
-  s.{pos + 0} <- Char.chr ((i lsr 0) land 0xff);
-  s.{pos + 1} <- Char.chr ((i lsr 8) land 0xff)
+  Bytes.set s (pos + 0) (Char.chr ((i lsr 0) land 0xff));
+  Bytes.set s (pos + 1) (Char.chr ((i lsr 8) land 0xff))
 
 let decodeInt2 s pos =
-  (Char.code s.{pos + 0} lsl 0) lor (Char.code s.{pos + 1} lsl 8)
+  (Char.code (Bytes.get s (pos + 0)) lsl 0) lor (Char.code (Bytes.get s (pos + 1)) lsl 8)
 
 let encodeInt1 s pos i =
   assert (i >= 0 && i < 256);
-  s.{pos + 0} <- Char.chr i
+  Bytes.set s (pos + 0) (Char.chr i)
 
 let decodeInt1 s pos =
-  Char.code s.{pos + 0}
+  Char.code (Bytes.get s (pos + 0))
 
 (* Transmit the contents of the tokenQueue *)
 let flushQueue q showProgress transmit cond =
@@ -153,7 +153,7 @@ let pushEOF q showProgress transmit =
   flushQueue q showProgress transmit
     (q.pos + 1 > queueSize) >>= (fun () ->
   assert (q.pos < queueSize);
-  q.data.{q.pos} <- 'E';
+  Bytes.set q.data q.pos 'E';
   q.pos <- q.pos + 1;
   q.previous <- `None;
   return ())
@@ -165,9 +165,9 @@ let rec pushString q id transmit s pos len =
       Util.msg "pushing string (pos:%d/%d len:%d)\n" q.pos queueSize len);
   let l = min len (queueSize - q.pos - 3) in
   assert (l > 0);
-  q.data.{q.pos} <- 'S';
+  Bytes.set q.data q.pos 'S';
   encodeInt2 q.data (q.pos + 1) l;
-  Bytearray.blit_from_string s pos q.data (q.pos + 3) l;
+  Bytes.blit s pos q.data (q.pos + 3) l;
   q.pos <- q.pos + l + 3;
   q.prog <- q.prog + l;
   q.previous <- `Str l;
@@ -182,9 +182,9 @@ let growString q id transmit len' s pos len =
       Util.msg "growing string (pos:%d/%d len:%d+%d)\n"
         q.pos queueSize len' len);
   let l = min (queueSize - q.pos) len in
-  Bytearray.blit_from_string s pos q.data q.pos l;
+  Bytes.blit s pos q.data q.pos l;
   assert (q.pos - len' - 3 >= 0);
-  assert (q.data.{q.pos - len' - 3} = 'S');
+  assert (Bytes.get q.data (q.pos - len' - 3) = 'S');
   assert (decodeInt2 q.data (q.pos - len' - 2) = len');
   let len'' = len' + l in
   encodeInt2 q.data (q.pos - len' - 2) len'';
@@ -202,7 +202,7 @@ let pushBlock q id transmit pos =
     debugToken (fun() ->
       Util.msg "pushing block (pos:%d/%d)\n" q.pos queueSize);
   assert (q.pos + 5 <= queueSize);
-  q.data.{q.pos} <- 'B';
+  Bytes.set q.data q.pos 'B';
   encodeInt3 q.data (q.pos + 1) pos;
   encodeInt1 q.data (q.pos + 4) 1;
   q.pos <- q.pos + 5;
@@ -216,7 +216,7 @@ let growBlock q id transmit pos =
       Util.msg "growing blocks (pos:%d/%d)\n" q.pos queueSize);
   assert (q.pos >= 5);
   let count = decodeInt1 q.data (q.pos - 1) in
-  assert (q.data.{q.pos - 5} = 'B');
+  assert (Bytes.get q.data (q.pos - 5) = 'B');
   assert (decodeInt3 q.data (q.pos - 4) + count = pos);
   assert (count < 255);
   encodeInt1 q.data (q.pos - 1) (count + 1);
@@ -245,7 +245,7 @@ let makeQueue blockSize =
       (* We need to make sure here that the size of the queue is not
          larger than 65538
          (1 byte: header, 2 bytes: string size, 65535 bytes: string) *)
-      Bytearray.create queueSize;
+      Bytes.create queueSize;
     pos = 0; previous = `None; prog = 0;
     bSize = blockSize }
 
@@ -287,12 +287,12 @@ let send infd length showProgress transmit =
 
 let rec receiveRec outfd showProgress data pos maxPos =
   if pos = maxPos then false else
-  match data.{pos} with
+  match Bytes.get data pos with
     'S' ->
       let length = decodeInt2 data (pos + 1) in
       if Trace.enabled "generic" then debug (fun() -> Util.msg
           "receiving %d bytes\n" length);
-      reallyWrite outfd (Bytearray.sub data (pos + 3) length) 0 length;
+      reallyWrite outfd (Bytes.sub data (pos + 3) length) 0 length;
       showProgress length;
       receiveRec outfd showProgress data (pos + length + 3) maxPos
   | 'E' ->
@@ -474,13 +474,13 @@ struct
     let maxPos = pos + len in
     let rec decode pos =
       if pos = maxPos then false else
-      match data.{pos} with
+      match Bytes.get data pos with
         'S' ->
           let length = decodeInt2 data (pos + 1) in
           if Trace.enabled "rsynctoken" then
             debugToken (fun() ->
               Util.msg "decompressing string (%d bytes)\n" length);
-          reallyWrite outfd (Bytearray.sub data (pos + 3) length) 0 length;
+          reallyWrite outfd (Bytes.sub data (pos + 3) length) 0 length;
           progress := !progress + length;
           decode (pos + length + 3)
       | 'B' ->
