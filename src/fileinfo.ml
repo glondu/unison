@@ -138,8 +138,8 @@ let set fspath path action newDesc =
   check fspath path p
 
 type stamp =
-    InodeStamp of int         (* inode number, for Unix systems *)
-  | CtimeStamp of float       (* creation time, for windows systems *)
+    InodeStamp of int [@key 1]        (* inode number, for Unix systems *)
+  | CtimeStamp of float [@key 2]      (* creation time, for windows systems *)
     (* FIX [BCP, 3/07]: The Ctimestamp variant is actually bogus.
       For file transfers, it appears that using the ctime to detect a
       file change is completely ineffective as, when a file is deleted (or
@@ -147,6 +147,7 @@ type stamp =
       ctime of the old file.  It is slightly harmful performancewise, as
       fastcheck expects ctime to be preserved by renaming.  Thus, we should
       probably not use any stamp under Windows. *)
+[@@deriving protobuf]
 
 let ignoreInodeNumbers =
   Prefs.createBool "ignoreinodenumbers" false

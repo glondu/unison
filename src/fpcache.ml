@@ -33,6 +33,9 @@ let tbl = PathTbl.create 101
 
 type entry =
   int * string * (Props.t * Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp)
+  [@@deriving protobuf]
+
+type entry_list = entry list [@@deriving protobuf]
 
 type state =
   { oc : out_channel;

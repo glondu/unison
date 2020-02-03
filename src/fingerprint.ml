@@ -17,7 +17,7 @@
 
 (* NOTE: IF YOU CHANGE TYPE "FINGERPRINT", THE ARCHIVE FORMAT CHANGES;       *)
 (* INCREMENT "UPDATE.ARCHIVEFORMAT"                                          *)
-type t = string
+type t = string [@@deriving protobuf]
 
 let pseudo_prefix = "LEN"
 

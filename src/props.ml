@@ -19,7 +19,7 @@
 let debug = Util.debug "props"
 
 module type S = sig
-  type t
+  type t [@@deriving protobuf]
   val dummy : t
   val hash : t -> int -> int
   val similar : t -> t -> bool
@@ -64,7 +64,7 @@ end = struct
 
 (* NOTE: IF YOU CHANGE TYPE "PERM", THE ARCHIVE FORMAT CHANGES; INCREMENT    *)
 (* "UPDATE.ARCHIVEFORMAT"                                                    *)
-type t = int * int
+type t = int * int [@@deriving protobuf]
 
 (* This allows us to export NullPerm while keeping the type perm abstract    *)
 let dummy = (0, 0)
@@ -294,9 +294,10 @@ module Id (M : sig
 end) : S = struct
 
 type t =
-    IdIgnored
-  | IdNamed of string
-  | IdNumeric of int
+    IdIgnored [@key 1]
+  | IdNamed of string [@key 2]
+  | IdNumeric of int [@key 3]
+[@@deriving protobuf]
 
 let dummy = IdIgnored
 
@@ -439,7 +440,8 @@ let sync =
     "When this flag is set to \\verb|true|, \
      file modification times (but not directory modtimes) are propagated."
 
-type t = Synced of float | NotSynced of float
+type t = Synced of float [@key 1] | NotSynced of float [@key 2]
+[@@deriving protobuf]
 
 let dummy = NotSynced 0.
 
@@ -605,7 +607,7 @@ end
 
 module TypeCreator : S = struct
 
-type t = string option
+type t = string option [@@deriving protobuf]
 
 let dummy = None
 
@@ -658,12 +660,13 @@ end
 (* ------------------------------------------------------------------------- *)
 
 type t =
-  { perm : Perm.t;
-    uid : Uid.t;
-    gid : Gid.t;
-    time : Time.t;
-    typeCreator : TypeCreator.t;
-    length : Uutil.Filesize.t }
+  { perm : Perm.t [@key 1];
+    uid : Uid.t [@key 2];
+    gid : Gid.t [@key 3];
+    time : Time.t [@key 4];
+    typeCreator : TypeCreator.t [@key 5];
+    length : Uutil.Filesize.t [@key 6]}
+[@@deriving protobuf]
 
 let template perm =
   { perm = perm; uid = Uid.dummy; gid = Gid.dummy;

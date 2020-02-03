@@ -17,7 +17,7 @@ val hash2 : int -> int -> int
 val hash : 'a -> int
 
 module type FILESIZE = sig
-  type t
+  type t [@@deriving protobuf]
   val zero : t
   val dummy : t
   val add : t -> t -> t

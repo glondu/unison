@@ -14,8 +14,9 @@ val get' : System.fspath -> t
 
 (* IF THIS CHANGES, MAKE SURE TO INCREMENT THE ARCHIVE VERSION NUMBER!       *)
 type stamp =
-    InodeStamp of int         (* inode number, for Unix systems *)
-  | CtimeStamp of float       (* creation time, for windows systems *)
+    InodeStamp of int [@key 1]        (* inode number, for Unix systems *)
+  | CtimeStamp of float [@key 2]      (* creation time, for windows systems *)
+[@@deriving protobuf]
 
 val stamp : t -> stamp
 

@@ -175,11 +175,14 @@ let openDouble dataFspath dataPath =
 (****)
 
 type 'a ressInfo =
-    NoRess
-  | HfsRess of Uutil.Filesize.t
-  | AppleDoubleRess of int * float * float * Uutil.Filesize.t * 'a
+    NoRess [@key 1]
+  | HfsRess of Uutil.Filesize.t [@key 2]
+  | AppleDoubleRess of int * float * float * Uutil.Filesize.t * 'a [@key 3]
+[@@deriving protobuf]
 
-type ressStamp = unit ressInfo
+type ressUnit = int [@@deriving protobuf]
+
+type ressStamp = ressUnit ressInfo [@@deriving protobuf]
 
 let ressStampToString r =
   match r with
@@ -449,7 +452,7 @@ let stamp info =
   | (HfsRess len) as s ->
       s
   | AppleDoubleRess (inode, mtime, ctime, len, _) ->
-      AppleDoubleRess (inode, mtime, ctime, len, ())
+      AppleDoubleRess (inode, mtime, ctime, len, 0)
 
 let ressFingerprint fspath path info =
   match info.ressInfo with

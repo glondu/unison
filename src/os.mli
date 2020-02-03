@@ -29,7 +29,7 @@ val delete : Fspath.t -> Path.local -> unit
    sensibly be compared for equality using =.  Internally, a fullfingerprint
    is a pair of the main file's fingerprint and the resource fork fingerprint,
    if any. *)
-type fullfingerprint
+type fullfingerprint [@@deriving protobuf]
 val fullfingerprint_to_string : fullfingerprint -> string
 val reasonForFingerprintMismatch : fullfingerprint -> fullfingerprint -> string
 val fullfingerprint_dummy : fullfingerprint
