@@ -148,6 +148,8 @@ let allHostsIter f =
 
 let allHostsMap f = Safelist.map f (replicaHostnames())
 
+type prefPathList = Path.t list [@@deriving protobuf]
+
 let paths =
   Prefs.create "path" []
     "path to synchronize"
@@ -160,6 +162,7 @@ let paths =
      ^ "are not regular expressions.")
     (fun oldpaths string -> Safelist.append oldpaths [Path.fromString string])
     (fun l -> Safelist.map Path.toString l)
+    prefPathList_to_protobuf prefPathList_from_protobuf
 
 (* FIX: this does weird things in case-insensitive mode... *)
 let globPath lr p =

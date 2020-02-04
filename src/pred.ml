@@ -98,6 +98,8 @@ let compile_pattern clause =
     end in
   (compiled, v)
 
+type prefStringList = string list [@@deriving protobuf]
+
 let create name ?(local=false) ?(advanced=false) fulldoc =
   let pref =
     Prefs.create name ~local []
@@ -107,7 +109,7 @@ let create name ?(local=false) ?(advanced=false) fulldoc =
       (fun oldList string ->
          ignore (compile_pattern string); (* Check well-formedness *)
         string :: oldList)
-      (fun l -> l) in
+      (fun l -> l) prefStringList_to_protobuf prefStringList_from_protobuf in
   {pref = pref; name = name;
    last_pref = []; default = []; last_def = []; last_mode = (Case.ops())#mode;
    compiled = Rx.empty; associated_strings = []}

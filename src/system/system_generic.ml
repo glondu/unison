@@ -15,7 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
-type fspath = string
+type fspath = string [@@deriving protobuf]
 
 let fspathFromString f = f
 let fspathToPrintString f = f

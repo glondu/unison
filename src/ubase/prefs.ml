@@ -4,8 +4,8 @@
 let debug = Util.debug "prefs"
 
 type 'a t =
-  { mutable value : 'a; defaultValue : 'a; mutable names : string list;
-    mutable setInProfile : bool }
+  { mutable value : 'a [@key 1]; defaultValue : 'a [@key 2]; mutable names : string list [@key 3];
+    mutable setInProfile : bool [@key 4]} [@@deriving protobuf]
 
 let read p = p.value
 
@@ -179,50 +179,74 @@ let registerPref name typ pspec doc fulldoc =
   if doc = "" || doc.[0] <> '*' then
     prefType := Util.StringMap.add name typ !prefType
 
-let createPrefInternal name typ local default doc fulldoc printer parsefn =
+type 'a prefInternal = 'a * string list [@@deriving protobuf]
+
+let createPrefInternal name typ local default doc fulldoc printer parsefn encoder decoder =
   let newCell = rawPref default name in
   registerPref name typ (parsefn newCell) doc fulldoc;
   adddumper name local
-    (fun () -> Marshal.to_string (newCell.value, newCell.names) []);
+    (fun () -> Protobuf.Encoder.encode_exn (prefInternal_to_protobuf encoder) (newCell.value, newCell.names));
   addprinter name (fun () -> printer newCell.value);
   addresetter
     (fun () ->
        newCell.setInProfile <- false; newCell.value <- newCell.defaultValue);
   addloader name
     (fun s ->
-       let (value, names) = Marshal.from_string s 0 in
+       let (value, names) = Protobuf.Decoder.decode_exn (prefInternal_from_protobuf decoder) s in
        newCell.value <- value);
   newCell
 
-let create name ?(local=false) default doc fulldoc intern printer =
+let create name ?(local=false) default doc fulldoc intern printer encoder decoder =
   createPrefInternal name `CUSTOM local default doc fulldoc printer
     (fun cell -> Uarg.String (fun s -> set cell (intern (read cell) s)))
+    encoder decoder
+
+type prefBool = bool [@@deriving protobuf]
 
 let createBool name ?(local=false) default doc fulldoc =
   let doc = if default then doc ^ " (default true)" else doc in
   createPrefInternal name `BOOL local default doc fulldoc
     (fun v -> [if v then "true" else "false"])
     (fun cell -> Uarg.Bool (fun b -> set cell b))
+    prefBool_to_protobuf prefBool_from_protobuf
+
+type prefInt = int [@@deriving protobuf]
 
 let createInt name ?(local=false) default doc fulldoc =
   createPrefInternal name `INT local default doc fulldoc
     (fun v -> [string_of_int v])
     (fun cell -> Uarg.Int (fun i -> set cell i))
+    prefInt_to_protobuf prefInt_from_protobuf
+
+type prefString = string [@@deriving protobuf]
 
 let createString name ?(local=false) default doc fulldoc =
   createPrefInternal name `STRING local default doc fulldoc
     (fun v -> [v])
     (fun cell -> Uarg.String (fun s -> set cell s))
+    prefString_to_protobuf prefString_from_protobuf
+
+type prefFspath = System.fspath [@@deriving protobuf]
 
 let createFspath name ?(local=false) default doc fulldoc =
   createPrefInternal name `STRING local default doc fulldoc
     (fun v -> [System.fspathToString v])
     (fun cell -> Uarg.String (fun s -> set cell (System.fspathFromString s)))
+    prefFspath_to_protobuf prefFspath_from_protobuf
+
+type prefStringList = string list [@@deriving protobuf]
 
 let createStringList name ?(local=false) doc fulldoc =
   createPrefInternal name `STRING_LIST local [] doc fulldoc
     (fun v -> v)
     (fun cell -> Uarg.String (fun s -> set cell (s:: read cell)))
+    prefStringList_to_protobuf prefStringList_from_protobuf
+
+type prefBoolWithDefault =
+  [ `True [@key 1]
+  | `False [@key 2]
+  | `Default [@key 3]
+  ] [@@deriving protobuf]
 
 let createBoolWithDefault name ?(local=false) doc fulldoc =
   createPrefInternal name `BOOLDEF local `Default doc fulldoc
@@ -240,6 +264,7 @@ let createBoolWithDefault name ?(local=false) doc fulldoc =
               | _                  -> `False
             in
             set cell v))
+    prefBoolWithDefault_to_protobuf prefBoolWithDefault_from_protobuf
 
 (*****************************************************************************)
 (*                     Preferences file parsing                              *)

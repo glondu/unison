@@ -73,6 +73,8 @@ val create :
      -> ('a->string->'a)        (* interning function for preference values
                                    (1st arg is old value of preference) *)
      -> ('a -> string list)     (* printing function for preference values *)
+     -> ('a -> Protobuf.Encoder.t -> unit)
+     -> (Protobuf.Decoder.t -> 'a)
      -> 'a t                    (*   -> new preference value *)
 
 (* Create an alternate name for a preference (the new name will not appear   *)
