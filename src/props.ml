@@ -796,7 +796,7 @@ let validatePrefs = Perm.validatePrefs
 (* We are reusing the directory length to store a flag indicating that
    the directory is unchanged *)
 
-type dirChangedStamp = Uutil.Filesize.t
+type dirChangedStamp = Uutil.Filesize.t [@@deriving protobuf]
 
 let freshDirStamp () =
   let t =

@@ -8,6 +8,7 @@ type archive =
   | ArchiveFile of Props.t * Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp
   | ArchiveSymlink of string
   | NoArchive
+[@@deriving protobuf]
 
 (* Calculate a canonical name for the set of roots to be synchronized.  This
    will be used in constructing the archive name for each root. Note, all

@@ -194,9 +194,11 @@ let ressStampToString r =
       Format.sprintf "Hfs(%d,%f,%f,%s)"
         ino mtime ctime (Uutil.Filesize.toString len)
 
+type ressInfo_arg = Fspath.t * int64 [@@deriving protobuf]
+
 type info =
-  { ressInfo : (Fspath.t * int64) ressInfo;
-    finfo : string }
+  { ressInfo : ressInfo_arg ressInfo [@key 1];
+    finfo : string [@key 2] } [@@deriving protobuf]
 
 external getFileInfosInternal :
   System.fspath -> bool -> string * int64 = "getFileInfos"

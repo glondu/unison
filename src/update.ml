@@ -57,10 +57,11 @@ let archiveFormat = 22
 module NameMap = MyMap.Make (Name)
 
 type archive =
-    ArchiveDir of Props.t * archive NameMap.t
-  | ArchiveFile of Props.t * Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp
-  | ArchiveSymlink of string
-  | NoArchive
+    ArchiveDir of Props.t * archive NameMap.t [@key 1]
+  | ArchiveFile of Props.t * Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp [@key 2]
+  | ArchiveSymlink of string [@key 3]
+  | NoArchive [@key 4]
+[@@deriving protobuf]
 
 (* For directories, only the permissions part of the file description (desc)
    is used for synchronization at the moment. *)
@@ -171,7 +172,8 @@ let thisRootsGlobalName (fspath: Fspath.t): string =
 (* ----- *)
 
 (* The status of an archive *)
-type archiveVersion = MainArch | NewArch | ScratchArch | Lock | FPCache
+type archiveVersion = MainArch [@key 1] | NewArch [@key 2] | ScratchArch [@key 3] | Lock [@key 4] | FPCache [@key 5]
+[@@deriving protobuf]
 
 let showArchiveName =
   Prefs.createBool "showarchive" false

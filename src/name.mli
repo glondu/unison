@@ -1,7 +1,7 @@
 (* Unison file synchronizer: src/name.mli *)
 (* Copyright 1999-2020, Benjamin C. Pierce (see COPYING for details) *)
 
-type t
+type t [@@deriving protobuf]
 
 val fromString : string -> t
 val toString : t -> string

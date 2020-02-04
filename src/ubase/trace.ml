@@ -166,8 +166,8 @@ let terse =
     ("When this preference is set to {\\tt true}, the user "
      ^ "interface will not print status messages.")
 
-type msgtype = Msg | StatusMajor | StatusMinor | Log
-type msg = msgtype * string
+type msgtype = Msg [@key 1] | StatusMajor [@key 2] | StatusMinor [@key 3] | Log [@key 4] [@@deriving protobuf]
+type msg = msgtype * string [@@deriving protobuf]
 
 let defaultMessageDisplayer s =
   if not (Prefs.read terse) then begin

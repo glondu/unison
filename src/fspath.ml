@@ -33,7 +33,7 @@ module Fs = System_impl.Fs
 let debug = Util.debug "fspath"
 let debugverbose = Util.debug "fsspath+"
 
-type t = Fspath of string
+type t = Fspath of string [@key 1] [@@deriving protobuf]
 
 let toString (Fspath f) = f
 let toPrintString (Fspath f) = f

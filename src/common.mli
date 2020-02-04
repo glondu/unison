@@ -58,6 +58,7 @@ type updateItem =
        * prevState                    (*   - summary of old state *)
   | Error                             (* Error while detecting updates *)
       of string                       (*   - description of error *)
+[@@deriving protobuf]
 
 (* Variable name prefix: "uc" *)
 and updateContent =

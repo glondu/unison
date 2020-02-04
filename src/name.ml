@@ -18,7 +18,7 @@
 
 (* NOTE: IF YOU CHANGE TYPE "NAME", THE ARCHIVE FORMAT CHANGES;
    INCREMENT "UPDATE.ARCHIVEFORMAT" *)
-type t = string
+type t = string [@@deriving protobuf]
 
 let compare n1 n2 = (Case.ops())#compare n1 n2
 

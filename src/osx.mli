@@ -11,7 +11,7 @@ type ressUnit = int [@@deriving protobuf]
 type ressStamp = ressUnit ressInfo [@@deriving protobuf]
 type info =
   { ressInfo : (Fspath.t * int64) ressInfo;
-    finfo : string }
+    finfo : string } [@@deriving protobuf]
 
 val defaultInfos :  [> `DIRECTORY | `FILE ] -> info
 

@@ -18,9 +18,9 @@
 
 (* Defines an abstract type of relative pathnames *)
 
-type 'a path = string
-type t = string
-type local = string
+type 'a path = string [@@deriving protobuf]
+type t = string [@@deriving protobuf]
+type local = string [@@deriving protobuf]
 
 let pathSeparatorChar = '/'
 let pathSeparatorString = "/"

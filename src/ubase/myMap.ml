@@ -17,14 +17,14 @@ Some functions have been added to suite Unison needs.
 
 module type OrderedType =
   sig
-    type t
+    type t [@@deriving protobuf]
     val compare: t -> t -> int
   end
 
 module type S =
   sig
     type key
-    type +'a t
+    type +'a t [@@deriving protobuf]
     val empty: 'a t
     val is_empty: 'a t -> bool
     val add: key -> 'a -> 'a t -> 'a t
@@ -44,11 +44,12 @@ module type S =
 
 module Make(Ord: OrderedType) = struct
 
-    type key = Ord.t
+    type key = Ord.t [@@deriving protobuf]
 
     type 'a t =
-        Empty
-      | Node of 'a t * key * 'a * 'a t * int
+        Empty [@key 1]
+      | Node of 'a t * key * 'a * 'a t * int [@key 2]
+    [@@deriving protobuf]
 
     let height = function
         Empty -> 0

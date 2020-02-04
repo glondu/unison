@@ -46,7 +46,7 @@ val statusFormatter : (string -> string -> string) ref
 
 (* The internal type of messages (it is exposed because it appears in the
    types of the following) *)
-type msg
+type msg [@@deriving protobuf]
 
 (* The internal routine used for formatting a message to be displayed
    locally.  It calls !messageDisplayer to do the actual work. *)

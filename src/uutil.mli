@@ -40,7 +40,7 @@ module Filesize : FILESIZE
    file transfers. *)
 module File :
   sig
-    type t
+    type t [@@deriving protobuf]
     val ofLine : int -> t
     val toLine : t -> int
     val toString : t -> string

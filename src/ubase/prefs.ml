@@ -78,7 +78,7 @@ let resetToDefaults () =
 (* created, a dumper (marshaler) and a loader (parser) are added to the list *)
 (* kept here...                                                              *)
 
-type dumpedPrefs = (string * bool * string) list
+type dumpedPrefs = (string * bool * string) list [@@deriving protobuf]
 
 let dumpers = ref ([] : (string * bool * (unit->string)) list)
 let loaders = ref (Util.StringMap.empty : (string->unit) Util.StringMap.t)

@@ -17,8 +17,9 @@
 
 
 type ('a, 'b) t =
-    Node of ('a * ('a, 'b) t) list * 'b option
-  | Leaf of 'b
+    Node of ('a * ('a, 'b) t) list * 'b option [@key 1]
+  | Leaf of 'b [@key 2]
+[@@deriving protobuf]
 
 type ('a, 'b) u =
   { anc: (('a, 'b) u * 'a) option;

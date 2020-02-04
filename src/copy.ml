@@ -169,9 +169,10 @@ let validFilePrefix connFrom fspathFrom pathFrom fspathTo pathTo info desc =
     Lwt.return None
 
 type transferStatus =
-    TransferSucceeded of Fileinfo.t
-  | TransferNeedsDoubleCheckAgainstCurrentSource of Fileinfo.t * Os.fullfingerprint
-  | TransferFailed of string
+    TransferSucceeded of Fileinfo.t [@key 1]
+  | TransferNeedsDoubleCheckAgainstCurrentSource of Fileinfo.t * Os.fullfingerprint [@key 2]
+  | TransferFailed of string [@key 3]
+[@@deriving protobuf]
 
 (* Paranoid check: recompute the transferred file's fingerprint to match it
    with the archive's.  If the old

@@ -69,36 +69,41 @@ let sortRoots rootList = Safelist.sort compareRoots rootList
 (* ---------------------------------------------------------------------- *)
 
 type prevState =
-    Previous of Fileinfo.typ * Props.t * Os.fullfingerprint * Osx.ressStamp
-  | New
+    Previous of Fileinfo.typ * Props.t * Os.fullfingerprint * Osx.ressStamp [@key 1]
+  | New [@key 2]
+[@@deriving protobuf]
 
 type contentschange =
-    ContentsSame
-  | ContentsUpdated of Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp
+    ContentsSame [@key 1]
+  | ContentsUpdated of Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp [@key 2]
+[@@deriving protobuf]
 
-type permchange     = PropsSame    | PropsUpdated
+type permchange     = PropsSame [@key 1]   | PropsUpdated [@key 2]
+[@@deriving protobuf]
 
 type updateItem =
-    NoUpdates                         (* Path not changed *)
+    NoUpdates [@key 1]                (* Path not changed *)
   | Updates                           (* Path changed in this replica *)
       of updateContent                (*   - new state *)
-       * prevState                    (*   - summary of old state *)
+       * prevState [@key 2]           (*   - summary of old state *)
   | Error                             (* Error while detecting updates *)
-      of string                       (*   - description of error *)
+      of string [@key 3]              (*   - description of error *)
+[@@deriving protobuf]
 
 and updateContent =
-    Absent                            (* Path refers to nothing *)
+    Absent [@key 1]                   (* Path refers to nothing *)
   | File                              (* Path refers to an ordinary file *)
       of Props.t                      (*   - summary of current state *)
-       * contentschange               (*   - hint to transport agent *)
+       * contentschange [@key 2]      (*   - hint to transport agent *)
   | Dir                               (* Path refers to a directory *)
       of Props.t                      (*   - summary of current state *)
        * (Name.t * updateItem) list   (*   - children;
                                              MUST KEEP SORTED for recon *)
        * permchange                   (*   - did permissions change? *)
-       * bool                         (*   - is the directory now empty? *)
+       * bool [@key 3]                (*   - is the directory now empty? *)
   | Symlink                           (* Path refers to a symbolic link *)
-      of string                       (*   - link text *)
+      of string [@key 4]              (*   - link text *)
+[@@deriving protobuf]
 
 (* ------------------------------------------------------------------------- *)
 
