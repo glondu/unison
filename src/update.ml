@@ -51,8 +51,7 @@ let ignoreArchives =
    for this file on the next sync. *)
 (*FIX: consider changing the way case-sensitivity mode is stored in
   the archive *)
-(*FIX: we should use only one Marshal.from_channel *)
-let archiveFormat = 22
+let archiveFormat = 23
 
 module NameMap = MyMap.Make (Name)
 
@@ -304,6 +303,8 @@ let verboseArchiveName thisRoot =
   Printf.sprintf "Archive for root %s synchronizing roots %s"
     thisRoot (Prefs.read rootsName)
 
+type archive_payload = archive * int * string [@@deriving protobuf]
+
 (* Load in the archive in [fspath]; check that archiveFormat (first line)
    and roots (second line) match skip the third line (time stamp), and read
    in the archive *)
@@ -340,12 +341,17 @@ let loadArchiveLocal fspath (thisRoot: string) :
         let _ = input_line c in
         (* Load the datastructure *)
         try
+          let size = int_of_string (input_line c) in
+          let buf = Bytes.create size in
+          really_input c buf 0 size;
           let ((archive, hash, magic) : archive * int * string) =
-            Marshal.from_channel c in
+            Protobuf.Decoder.decode_exn archive_payload_from_protobuf buf in
           let properties =
             try
-              ignore (input_char c); (* Marker *)
-              Marshal.from_channel c
+              let size = int_of_string (input_line c) in
+              let buf = Bytes.create size in
+              really_input c buf 0 size;
+              Protobuf.Decoder.decode_exn Proplist.from_protobuf buf
             with End_of_file ->
               Proplist.empty
           in
@@ -377,10 +383,14 @@ let storeArchiveLocal fspath thisRoot archive hash magic properties =
    output_string c (Printf.sprintf "Written at %s - %s mode\n"
                       (Util.time2string (Util.time()))
                       ((Case.ops())#modeDesc));
-   Marshal.to_channel c (archive, hash, magic) [Marshal.No_sharing];
-   output_char c '\000'; (* Marker that indicates that the archive
-                            is followed by a property list *)
-   Marshal.to_channel c properties [Marshal.No_sharing];
+   let payload = Protobuf.Encoder.encode_exn archive_payload_to_protobuf (archive, hash, magic) in
+   output_string c (string_of_int (Bytes.length payload));
+   output_string c "\n";
+   output_bytes c payload;
+   let properties = Protobuf.Encoder.encode_exn Proplist.to_protobuf properties in
+   output_string c (string_of_int (Bytes.length properties));
+   output_string c "\n";
+   output_bytes c properties;
    close_out c)
 
 (* Remove the archieve under the root path [fspath] with archiveVersion [v] *)
