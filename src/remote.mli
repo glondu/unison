@@ -13,6 +13,8 @@ end
    requested by a remote client.) *)
 val registerHostCmd :
     string              (* command name *)
+ -> ('a -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'a)
+ -> ('b -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'b)
  -> ('a -> 'b Lwt.t)    (* local command *)
  -> (   string          (* -> host *)
      -> 'a              (*    arguments *)
@@ -27,6 +29,8 @@ val registerHostCmd :
    <funcName>OnRoot and <funcName>Local *)
 val registerRootCmd :
     string                         (* command name *)
+ -> ('a -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'a)
+ -> ('b -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'b)
  -> ((Fspath.t * 'a) -> 'b Lwt.t)  (* local command *)
  -> (   Common.root                (* -> root *)
      -> 'a                         (*    additional arguments *)
@@ -86,12 +90,17 @@ type connection
 val connectionToRoot : Common.root -> connection
 
 val registerServerCmd :
-  string -> (connection -> 'a -> 'b Lwt.t) -> connection -> 'a -> 'b Lwt.t
+  string ->
+  ('a -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'a) ->
+  ('b -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'b) ->
+  (connection -> 'a -> 'b Lwt.t) -> connection -> 'a -> 'b Lwt.t
 val intSize : int
 val encodeInt : int -> bytes * int * int
 val decodeInt : bytes -> int -> int
 val registerRootCmdWithConnection :
     string                          (* command name *)
+ -> ('a -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'a)
+ -> ('b -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'b)
  -> (connection -> 'a -> 'b Lwt.t)  (* local command *)
  ->    Common.root                  (* root on which the command is executed *)
     -> Common.root                  (* other root *)
@@ -107,3 +116,7 @@ val registerStreamCmd :
   (bytes -> int -> 'a) ->
   (connection -> 'a -> unit) ->
   connection -> (('a -> unit Lwt.t) -> 'b Lwt.t) -> 'b Lwt.t
+
+val punit : (unit -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> unit)
+val pbool : (bool -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> bool)
+val pstring : (string -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> string)

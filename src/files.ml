@@ -73,7 +73,7 @@ let processCommitLog () =
     Lwt.return ()
 
 let processCommitLogOnHost =
-  Remote.registerHostCmd "processCommitLog" processCommitLog
+  Remote.registerHostCmd "processCommitLog" Remote.punit Remote.punit processCommitLog
 
 let processCommitLogs() =
   Lwt_unix.run
@@ -135,7 +135,10 @@ let deleteLocal (fspathTo, (pathTo, ui, notDefault)) =
   Update.replaceArchiveLocal fspathTo localPathTo Update.NoArchive;
   Lwt.return ()
 
-let deleteOnRoot = Remote.registerRootCmd "delete" deleteLocal
+type delete_arg = Path.t * Common.updateItem * bool [@@deriving protobuf]
+let delete_arg = delete_arg_to_protobuf, delete_arg_from_protobuf
+
+let deleteOnRoot = Remote.registerRootCmd "delete" delete_arg Remote.punit deleteLocal
 
 let delete rootFrom pathFrom rootTo pathTo ui notDefault =
   deleteOnRoot rootTo (pathTo, ui, notDefault) >>= fun _ ->
@@ -159,11 +162,18 @@ let setPropLocal (fspath, (path, ui, newDesc, oldDesc)) =
   Update.updateProps fspath localPath (Some newDesc) ui;
   Lwt.return ()
 
-let setPropOnRoot = Remote.registerRootCmd "setProp" setPropLocal
+type setProp_arg = Path.t * Common.updateItem * Props.t * Props.t [@@deriving protobuf]
+let setProp_arg = setProp_arg_to_protobuf, setProp_arg_from_protobuf
+
+let setPropOnRoot = Remote.registerRootCmd "setProp" setProp_arg Remote.punit setPropLocal
+
+type updateProps_arg = Path.t * Props.t option * Common.updateItem [@@deriving protobuf]
+let updateProps_arg = updateProps_arg_to_protobuf, updateProps_arg_from_protobuf
 
 let updatePropsOnRoot =
   Remote.registerRootCmd
    "updateProps"
+   updateProps_arg Remote.punit
      (fun (fspath, (path, propOpt, ui)) ->
         let localPath = Update.translatePathLocal fspath path in
         (* Archive update must be done first *)
@@ -190,9 +200,16 @@ let setProp rootFrom pathFrom rootTo pathTo newDesc oldDesc uiFrom uiTo =
 
 (* ------------------------------------------------------------ *)
 
+type mkdir_arg = Fspath.t * Path.local [@@deriving protobuf]
+let mkdir_arg = mkdir_arg_to_protobuf, mkdir_arg_from_protobuf
+
+type mkdir_ret = bool * Props.t [@@deriving protobuf]
+let mkdir_ret = mkdir_ret_to_protobuf, mkdir_ret_from_protobuf
+
 let mkdirOnRoot =
   Remote.registerRootCmd
     "mkdir"
+    mkdir_arg mkdir_ret
     (fun (fspath,(workingDir,path)) ->
        let info = Fileinfo.get false workingDir path in
        if info.Fileinfo.typ = `DIRECTORY then begin
@@ -209,16 +226,24 @@ let mkdirOnRoot =
          Lwt.return (false, (Fileinfo.get false workingDir path).Fileinfo.desc)
        end)
 
+type setDirProp_arg = Fspath.t * Path.local * Props.t * Props.t [@@deriving protobuf]
+let setDirProp_arg = setDirProp_arg_to_protobuf, setDirProp_arg_from_protobuf
+
 let setDirPropOnRoot =
   Remote.registerRootCmd
     "setDirProp"
+    setDirProp_arg Remote.punit
     (fun (_, (workingDir, path, initialDesc, newDesc)) ->
       Fileinfo.set workingDir path (`Set initialDesc) newDesc;
       Lwt.return ())
 
+type makeSymlink_arg = Fspath.t * Path.local * string [@@deriving protobuf]
+let makeSymlink_arg = makeSymlink_arg_to_protobuf, makeSymlink_arg_from_protobuf
+
 let makeSymlink =
   Remote.registerRootCmd
     "makeSymlink"
+    makeSymlink_arg Remote.punit
     (fun (fspath, (workingDir, path, l)) ->
        if Os.exists workingDir path then
          Os.delete workingDir path;
@@ -336,7 +361,18 @@ let renameLocal
   end;
   Lwt.return ()
 
-let renameOnHost = Remote.registerRootCmd "rename" renameLocal
+type rename_arg =
+  Path.local
+  * Fspath.t
+  * Path.local
+  * Path.local
+  * Common.updateItem
+  * Update.archive option
+  * bool
+[@@deriving protobuf]
+let rename_arg = rename_arg_to_protobuf, rename_arg_from_protobuf
+
+let renameOnHost = Remote.registerRootCmd "rename" rename_arg Remote.punit renameLocal
 
 let rename root localPath workingDir pathOld pathNew ui archOpt notDefault =
   debug (fun() ->
@@ -371,8 +407,14 @@ let setupTargetPathsLocal (fspath, path) =
   let tempPath = Os.tempPath ~fresh:false workingDir realPath in
   Lwt.return (workingDir, realPath, tempPath, localPath)
 
+type setupTargetPaths_arg = Path.t [@@deriving protobuf]
+let setupTargetPaths_arg = setupTargetPaths_arg_to_protobuf, setupTargetPaths_arg_from_protobuf
+
+type setupTargetPaths_ret = Fspath.t * Path.local * Path.local * Path.local [@@deriving protobuf]
+let setupTargetPaths_ret = setupTargetPaths_ret_to_protobuf, setupTargetPaths_ret_from_protobuf
+
 let setupTargetPaths =
-  Remote.registerRootCmd "setupTargetPaths" setupTargetPathsLocal
+  Remote.registerRootCmd "setupTargetPaths" setupTargetPaths_arg setupTargetPaths_ret setupTargetPathsLocal
 
 let rec createDirectories fspath localPath props =
   match props with
@@ -401,8 +443,20 @@ let setupTargetPathsAndCreateParentDirectoryLocal (fspath, (path, props)) =
   let tempPath = Os.tempPath ~fresh:false workingDir realPath in
   Lwt.return (workingDir, realPath, tempPath, localPath)
 
+type setupTargetPathsAndCreateParentDirectory_arg = Path.t * Props.t list [@@deriving protobuf]
+let setupTargetPathsAndCreateParentDirectory_arg =
+  setupTargetPathsAndCreateParentDirectory_arg_to_protobuf,
+  setupTargetPathsAndCreateParentDirectory_arg_from_protobuf
+
+type setupTargetPathsAndCreateParentDirectory_ret = Fspath.t * Path.local * Path.local * Path.local [@@deriving protobuf]
+let setupTargetPathsAndCreateParentDirectory_ret =
+  setupTargetPathsAndCreateParentDirectory_ret_to_protobuf,
+  setupTargetPathsAndCreateParentDirectory_ret_from_protobuf
+
 let setupTargetPathsAndCreateParentDirectory =
   Remote.registerRootCmd "setupTargetPathsAndCreateParentDirectory"
+    setupTargetPathsAndCreateParentDirectory_arg
+    setupTargetPathsAndCreateParentDirectory_ret
     setupTargetPathsAndCreateParentDirectoryLocal
 
 (* ------------------------------------------------------------ *)
@@ -423,8 +477,15 @@ let updateSourceArchiveLocal (fspathFrom, (localPathFrom, uiFrom, errPaths)) =
   Stasher.stashCurrentVersion fspathFrom localPathFrom None;
   Lwt.return ()
 
+type updateSourceArchive_arg = Path.local * Common.updateItem * Path.local list [@@deriving protobuf]
+let updateSourceArchive_arg =
+  updateSourceArchive_arg_to_protobuf,
+  updateSourceArchive_arg_from_protobuf
+
 let updateSourceArchive =
-  Remote.registerRootCmd "updateSourceArchive" updateSourceArchiveLocal
+  Remote.registerRootCmd "updateSourceArchive"
+    updateSourceArchive_arg Remote.punit
+    updateSourceArchiveLocal
 
 (* ------------------------------------------------------------ *)
 
@@ -459,8 +520,15 @@ let deleteSpuriousChildrenLocal (_, (fspathTo, pathTo, archChildren)) =
     (List.sort Name.compare (Os.childrenOf fspathTo pathTo));
   Lwt.return ()
 
+type deleteSpuriousChildren_arg = Fspath.t * Path.local * Name.t list [@@deriving protobuf]
+let deleteSpuriousChildren_arg =
+  deleteSpuriousChildren_arg_to_protobuf,
+  deleteSpuriousChildren_arg_from_protobuf
+
 let deleteSpuriousChildren =
-  Remote.registerRootCmd "deleteSpuriousChildren" deleteSpuriousChildrenLocal
+  Remote.registerRootCmd "deleteSpuriousChildren"
+    deleteSpuriousChildren_arg Remote.punit
+    deleteSpuriousChildrenLocal
 
 let rec normalizeProps propsFrom propsTo =
   match propsFrom, propsTo with

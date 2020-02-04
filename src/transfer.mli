@@ -75,7 +75,7 @@ module Rsync :
     val aboveRsyncThreshold : Uutil.Filesize.t -> bool
 
     (* Built from the old file by the destination computer *)
-    type rsync_block_info
+    type rsync_block_info [@@deriving protobuf]
 
     (* Expected size of the [rsync_block_info] datastructure (in KiB). *)
     val memoryFootprint : Uutil.Filesize.t -> Uutil.Filesize.t -> int

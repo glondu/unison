@@ -455,17 +455,20 @@ let registerTag string =
     registeredSet := Util.StringSet.add string !registeredSet;
   Bytes.of_string string
 
-let defaultMarshalingFunctions =
+let makeMarshalingFunctionsFromProtobuf (encoder, decoder) =
   (fun data rem ->
-     let s = Marshal.to_bytes data [Marshal.No_sharing] in
-     let l = Bytes.length s in
-     ((s, 0, l) :: rem, l)),
+    let s = Protobuf.Encoder.encode_exn encoder data in
+    let l = Bytes.length s in
+    ((s, 0, l) :: rem, l)),
   (fun buf pos ->
-      try Marshal.from_bytes buf pos
-      with Failure s -> raise (Util.Fatal (Printf.sprintf 
+    let n = Bytes.length buf in
+    let b = Bytes.create (n - pos) in
+    Bytes.blit buf pos b 0 (n - pos);
+    try Protobuf.Decoder.decode_exn decoder b
+    with Failure s -> raise (Util.Fatal (Printf.sprintf
 "Fatal error during unmarshaling (%s),
 possibly because client and server have been compiled with different\
-versions of the OCaml compiler." s)))
+versions of ppx_deriving_protobuf." s)))
 
 let makeMarshalingFunctions payloadMarshalingFunctions string =
   let (marshalPayload, unmarshalPayload) = payloadMarshalingFunctions in
@@ -620,15 +623,19 @@ type serverstream =
 let serverStreams = ref (Util.StringMap.empty : serverstream Util.StringMap.t)
 
 type header =
-    NormalResult
-  | TransientExn of string
-  | FatalExn of string
-  | Request of string
-  | Stream of string
-  | StreamAbort
+    NormalResult [@key 1]
+  | TransientExn of string [@key 2]
+  | FatalExn of string [@key 3]
+  | Request of string [@key 4]
+  | Stream of string [@key 5]
+  | StreamAbort [@key 6]
+[@@deriving protobuf]
 
 let ((marshalHeader, unmarshalHeader) : header marshalingFunctions) =
-  makeMarshalingFunctions defaultMarshalingFunctions "rsp"
+  makeMarshalingFunctions
+    (makeMarshalingFunctionsFromProtobuf
+       (header_to_protobuf, header_from_protobuf))
+    "rsp"
 
 let processRequest conn id cmdName buf =
   let cmd =
@@ -799,9 +806,11 @@ let registerSpecialServerCmd
   in
   client
 
-let registerServerCmd name f =
-  registerSpecialServerCmd
-    name defaultMarshalingFunctions defaultMarshalingFunctions f
+let registerServerCmd name mArg mRes f =
+  registerSpecialServerCmd name
+    (makeMarshalingFunctionsFromProtobuf mArg)
+    (makeMarshalingFunctionsFromProtobuf mRes)
+    f
 
 (* RegisterHostCmd is a simpler version of registerClientServer [registerServerCmd?].
    It is used to create remote procedure calls: the only communication
@@ -813,10 +822,10 @@ let registerServerCmd name f =
    RegisterHostCmd recognizes the case where the server is the local
    host, and it avoids socket communication in this case.
 *)
-let registerHostCmd cmdName cmd =
+let registerHostCmd cmdName mArg mRet cmd =
   let serverSide = (fun _ args -> cmd args) in
   let client0 =
-    registerServerCmd cmdName serverSide in
+    registerServerCmd cmdName mArg mRet serverSide in
   let client host args =
     let conn = hostConnection host in
     client0 conn args in
@@ -833,15 +842,19 @@ let hostOfRoot root =
   | (Common.Remote host, _) -> host
 let connectionToRoot root = hostConnection (hostOfRoot root)
 
+type 'a with_fspath = Fspath.t * 'a [@@deriving protobuf]
+
 (* RegisterRootCmd is like registerHostCmd but it indexes connections by
    root instead of host. *)
-let registerRootCmd (cmdName : string) (cmd : (Fspath.t * 'a) -> 'b) =
-  let r = registerHostCmd cmdName cmd in
+let registerRootCmd (cmdName : string) mArg mRet (cmd : (Fspath.t * 'a) -> 'b) =
+  let (encoder, decoder) = mArg in
+  let mArg' = (with_fspath_to_protobuf encoder, with_fspath_from_protobuf decoder) in
+  let r = registerHostCmd cmdName mArg' mRet cmd in
   fun root args -> r (hostOfRoot root) ((snd root), args)
 
 let registerRootCmdWithConnection
-  (cmdName : string) (cmd : connection -> 'a -> 'b) =
-  let client0 = registerServerCmd cmdName cmd in
+  (cmdName : string) mArg mRet (cmd : connection -> 'a -> 'b) =
+  let client0 = registerServerCmd cmdName mArg mRet cmd in
   (* Return a function that runs either the proxy or the local version,
      depending on whether the call is to the local host or a remote one *)
   fun localRoot remoteRoot args ->
@@ -860,6 +873,18 @@ let streamingActivated =
      streaming protocol for transferring file contents more efficiently. \
      The default value is \\texttt{true}."
 
+let punit_to_protobuf () e =
+  Protobuf.Encoder.bytes (Bytes.create 0) e
+
+let punit_from_protobuf d =
+  ignore (Protobuf.Decoder.bytes d);
+  ()
+
+let punit = punit_to_protobuf, punit_from_protobuf
+
+type pint = int [@@deriving protobuf]
+let pint = pint_to_protobuf, pint_from_protobuf
+
 let registerStreamCmd
     (cmdName : string)
     marshalingFunctionsArgs
@@ -867,11 +892,14 @@ let registerStreamCmd
     =
   let cmd =
     registerSpecialServerCmd
-      cmdName marshalingFunctionsArgs defaultMarshalingFunctions
+      cmdName marshalingFunctionsArgs
+      (makeMarshalingFunctionsFromProtobuf punit)
       (fun conn v -> serverSide conn v; Lwt.return ())
   in
   let ping =
     registerServerCmd (cmdName ^ "Ping")
+      pint
+      punit
       (fun conn (id : int) ->
          try
            let e = Hashtbl.find streamError id in
@@ -920,8 +948,15 @@ let registerStreamCmd
            ping conn id >>= fun () -> Lwt.fail e)
     end
 
+type pstring = string [@@deriving protobuf]
+let pstring = (pstring_to_protobuf, pstring_from_protobuf)
+
+type pbool = bool [@@deriving protobuf]
+let pbool = (pbool_to_protobuf, pbool_from_protobuf)
+
 let commandAvailable =
   registerRootCmd "commandAvailable"
+    pstring pbool
     (fun (_, cmdName) -> Lwt.return (Util.StringMap.mem cmdName !serverCmds))
 
 (****************************************************************************
@@ -994,7 +1029,7 @@ let negociateFlowControlLocal conn () =
   Lwt.return false
 
 let negociateFlowControlRemote =
-  registerServerCmd "negociateFlowControl" negociateFlowControlLocal
+  registerServerCmd "negociateFlowControl" punit pbool negociateFlowControlLocal
 
 let negociateFlowControl conn =
   (* Flow control negociation can be done asynchronously. *)
@@ -1201,8 +1236,15 @@ let canonizeLocally s unicode =
   Fs.setUnicodeEncoding unicode;
   Fspath.canonize s
 
+type canonizeOnServer_arg = string option * pbool [@@deriving protobuf]
+let canonizeOnServer_arg = (canonizeOnServer_arg_to_protobuf, canonizeOnServer_arg_from_protobuf)
+
+type canonizeOnServer_ret = string * Fspath.t [@@deriving protobuf]
+let canonizeOnServer_ret = (canonizeOnServer_ret_to_protobuf, canonizeOnServer_ret_from_protobuf)
+
 let canonizeOnServer =
   registerServerCmd "canonizeOnServer"
+    canonizeOnServer_arg canonizeOnServer_ret
     (fun _ (s, unicode) ->
        Lwt.return (Os.myCanonicalHostName (), canonizeLocally s unicode))
 
@@ -1409,11 +1451,15 @@ let openConnectionCancel (i1,i2,o1,o2,s,fdopt,clroot,pid) =
 let showWarningOnClient =
     (registerServerCmd
        "showWarningOnClient"
+       pstring punit
        (fun _ str -> Lwt.return (Util.warn str)))
+
+let pmsg = Trace.msg_to_protobuf, Trace.msg_from_protobuf
 
 let forwardMsgToClient =
     (registerServerCmd
        "forwardMsgToClient"
+       pmsg punit
        (fun _ str -> (*msg "forwardMsgToClient: %s\n" str; *)
           Lwt.return (Trace.displayMessageLocally str)))
 

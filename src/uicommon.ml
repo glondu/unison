@@ -439,7 +439,7 @@ let debug = Trace.debug "startup"
 
 (*FIX: remove when Unison version > 2.40 *)
 let _ =
-Remote.registerRootCmd "_unicodeCaseSensitive_" (fun _ -> Lwt.return ())
+Remote.registerRootCmd "_unicodeCaseSensitive_" Remote.punit Remote.punit (fun _ -> Lwt.return ())
 let supportUnicodeCaseSensitive () =
   if Uutil.myMajorVersion > "2.40" (* The test is correct until 2.99... *) then
     Lwt.return true
@@ -450,10 +450,14 @@ let supportUnicodeCaseSensitive () =
     Lwt.return (List.for_all (fun x -> x) l)
   end
 
+type architecture_ret = bool * bool * bool [@@deriving protobuf]
+let architecture_ret = architecture_ret_to_protobuf, architecture_ret_from_protobuf
+
 (* Determine the case sensitivity of a root (does filename FOO==foo?) *)
 let architecture =
   Remote.registerRootCmd
     "architecture"
+    Remote.punit architecture_ret
     (fun (_,()) -> return (Util.osType = `Win32, Osx.isMacOSX, Util.isCygwin))
 
 (* During startup the client determines the case sensitivity of each root.

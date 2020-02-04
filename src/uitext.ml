@@ -1009,6 +1009,7 @@ module PathMap = Map.Make (Path)
 let waitForChangesRoot: Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "waitForChanges"
+    Remote.punit Remote.punit
     (fun (fspath, _) -> Fswatchold.wait (Update.archiveHash fspath))
 
 let waitForChanges t =

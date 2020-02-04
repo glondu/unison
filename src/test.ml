@@ -100,9 +100,12 @@ let read_dir d =
 let extend p file = Fspath.concat p (Path.fromString file)
 
 type fs =
-  | File of string
-  | Link of string
-  | Dir of (string * fs) list
+  | File of string [@key 1]
+  | Link of string [@key 2]
+  | Dir of (string * fs) list [@key 3]
+[@@deriving protobuf]
+
+let fs = fs_to_protobuf, fs_from_protobuf
 
 let rec equal fs1 fs2 =
   match fs1,fs2 with
@@ -158,6 +161,7 @@ let writefs p fs =
 let checkRootEmpty : Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "checkRootEmpty"
+    Remote.punit Remote.punit
     (fun (fspath, ()) ->
        if Os.exists fspath Path.empty then
          raise (Util.Fatal (Printf.sprintf
@@ -168,25 +172,32 @@ let checkRootEmpty : Common.root -> unit -> unit Lwt.t =
 let makeRootEmpty : Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "makeRootEmpty"
+    Remote.punit Remote.punit
     (fun (fspath, ()) ->
        remove_file_or_dir fspath;
        Lwt.return ())
 
+type getfs_ret = fs option [@@deriving protobuf]
+let getfs_ret = (getfs_ret_to_protobuf, getfs_ret_from_protobuf)
+
 let getfs : Common.root -> unit -> (fs option) Lwt.t =
   Remote.registerRootCmd
     "getfs"
+    Remote.punit getfs_ret
     (fun (fspath, ()) ->
        Lwt.return (readfs fspath))
 
 let getbackup : Common.root -> unit -> (fs option) Lwt.t =
   Remote.registerRootCmd
     "getbackup"
+    Remote.punit getfs_ret
     (fun (fspath, ()) ->
        Lwt.return (readfs (Stasher.backupDirectory ())))
 
 let makeBackupEmpty : Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "makeBackupEmpty"
+    Remote.punit Remote.punit
     (fun (fspath, ()) ->
        let b = Stasher.backupDirectory () in
        debug (fun () -> Util.msg "Removing %s\n" (Fspath.toDebugString b));
@@ -195,6 +206,7 @@ let makeBackupEmpty : Common.root -> unit -> unit Lwt.t =
 let putfs : Common.root -> fs -> unit Lwt.t =
   Remote.registerRootCmd
     "putfs"
+    fs Remote.punit
     (fun (fspath, fs) ->
        writefs fspath fs;
        Lwt.return ())

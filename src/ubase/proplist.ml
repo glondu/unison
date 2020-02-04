@@ -18,13 +18,13 @@
 type 'a key = string
 type t = Obj.t Util.StringMap.t
 
-let names = ref Util.StringSet.empty
+let names = ref Util.StringMap.empty
 
-let register nm =
-  if (Util.StringSet.mem nm !names) then
+let register nm p =
+  if (Util.StringMap.mem nm !names) then
     raise (Util.Fatal
             (Format.sprintf "Property lists: %s already registered!" nm));
-  names := Util.StringSet.add nm !names;
+  names := Util.StringMap.add nm (Obj.repr p) !names;
   nm
 
 let empty = Util.StringMap.empty
@@ -34,3 +34,30 @@ let mem = Util.StringMap.mem
 let find (k : 'a key) m : 'a = Obj.obj (Util.StringMap.find k m)
 
 let add (k : 'a key) (v : 'a) m = Util.StringMap.add k (Obj.repr v) m
+
+let find_protobuf (k : 'a key) :
+      ('a -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'a)
+  =
+  match Util.StringMap.find_opt k !names with
+  | Some x -> Obj.obj x
+  | None ->
+     raise (Util.Fatal (Format.sprintf "Property lists: %s not yet registered!" k))
+
+type proplist = (string * bytes) list [@@deriving protobuf]
+
+let to_protobuf x e =
+  proplist_to_protobuf
+    (Util.StringMap.fold
+       (fun k v accu ->
+         let encoder, _ = find_protobuf k in
+         (k, Protobuf.Encoder.encode_exn encoder v) :: accu
+       ) x []
+    ) e
+
+let from_protobuf d =
+  List.fold_left
+    (fun accu (k, v) ->
+      let _, decoder = find_protobuf k in
+      let v = Protobuf.Decoder.decode_exn decoder v in
+      Util.StringMap.add k (Obj.repr v) accu
+    ) Util.StringMap.empty (proplist_from_protobuf d)

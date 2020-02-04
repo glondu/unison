@@ -193,9 +193,12 @@ let expandWildcardPaths() =
 (*                         PROPAGATION OF PREFERENCES                        *)
 (*****************************************************************************)
 
+let dumpedPrefs = Prefs.dumpedPrefs_to_protobuf, Prefs.dumpedPrefs_from_protobuf
+
 let propagatePrefsTo =
   Remote.registerHostCmd
     "installPrefs"
+    dumpedPrefs Remote.punit
     (fun prefs -> return (Prefs.load prefs))
 
 let propagatePrefs () =

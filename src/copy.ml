@@ -101,9 +101,21 @@ let checkForChangesToSourceLocal
            Transfer aborted."
           (Fspath.toPrintString (Fspath.concat fspathFrom pathFrom))))
 
+type checkForChangesToSource_arg =
+  Path.local
+  * Props.t
+  * Os.fullfingerprint
+  * Fileinfo.stamp option
+  * Osx.ressStamp
+  * Os.fullfingerprint option
+  * bool
+[@@deriving protobuf]
+let checkForChangesToSource_arg = checkForChangesToSource_arg_to_protobuf, checkForChangesToSource_arg_from_protobuf
+
 let checkForChangesToSourceOnRoot =
   Remote.registerRootCmd
     "checkForChangesToSource"
+    checkForChangesToSource_arg Remote.punit
     (fun (fspathFrom,
           (pathFrom, archDesc, archFp, archStamp, archRess, newFpOpt, paranoid)) ->
       checkForChangesToSourceLocal
@@ -143,9 +155,16 @@ let rec fingerprintPrefix fspath path offset len accu =
       (fp :: accu)
   end
 
+type fingerprintSubfile_arg = Fspath.t * Path.local * Uutil.Filesize.t [@@deriving protobuf]
+let fingerprintSubfile_arg = fingerprintSubfile_arg_to_protobuf, fingerprintSubfile_arg_from_protobuf
+
+type fingerprintSubfile_ret = Fingerprint.t list [@@deriving protobuf]
+let fingerprintSubfile_ret = fingerprintSubfile_ret_to_protobuf, fingerprintSubfile_ret_from_protobuf
+
 let fingerprintPrefixRemotely =
   Remote.registerServerCmd
     "fingerprintSubfile"
+    fingerprintSubfile_arg fingerprintSubfile_ret
     (fun _ (fspath, path, len) ->
        Lwt.return (fingerprintPrefix fspath path 0L len []))
 
@@ -218,8 +237,13 @@ let saveTempFileLocal (fspathTo, (pathTo, realPathTo, reason)) =
         reason
         (Fspath.toDebugString (Fspath.concat fspathTo savepath))))
 
+type saveTempFile_arg = Path.local * Path.local * string [@@deriving protobuf]
+let saveTempFile_arg = saveTempFile_arg_to_protobuf, saveTempFile_arg_from_protobuf
+
+let fileinfo = Fileinfo.to_protobuf, Fileinfo.from_protobuf
+
 let saveTempFileOnRoot =
-  Remote.registerRootCmd "saveTempFile" saveTempFileLocal
+  Remote.registerRootCmd "saveTempFile" saveTempFile_arg fileinfo saveTempFileLocal
 
 (****)
 
@@ -462,7 +486,24 @@ let compress conn
        Util.convertUnixErrorsToTransient "transferring file contents"
          (fun () -> raise e))
 
-let compressRemotely = Remote.registerServerCmd "compress" compress
+type data_arg =
+  [ `DATA [@key 1]
+  | `DATA_APPEND of Uutil.Filesize.t [@key 2]
+  | `RESS [@key 3] ]
+[@@deriving protobuf]
+
+type compress_arg =
+  Transfer.Rsync.rsync_block_info option
+  * Fspath.t
+  * Path.local
+  * data_arg
+  * Uutil.Filesize.t
+  * Uutil.File.t
+  * int
+[@@deriving protobuf]
+let compress_arg = compress_arg_to_protobuf, compress_arg_from_protobuf
+
+let compressRemotely = Remote.registerServerCmd "compress" compress_arg Remote.punit compress
 
 let close_all infd outfd =
   Util.convertUnixErrorsToTransient
@@ -806,9 +847,30 @@ let finishExternalTransferLocal connFrom
   Xferhint.insertEntry fspathTo pathTo fp;
   Lwt.return res
 
+type copyOrUpdate =
+  [ `Copy [@key 1]
+  | `Update of Uutil.Filesize.t * Uutil.Filesize.t [@key 2]
+  ] [@@deriving protobuf]
+
+type finishExternalTransfer_arg =
+  Fspath.t
+  * Path.local
+  * Fspath.t
+  * Path.local
+  * Path.local
+  * copyOrUpdate
+  * Props.t
+  * Os.fullfingerprint
+  * Osx.ressStamp
+  * Uutil.File.t
+[@@deriving protobuf]
+let finishExternalTransfer_arg = finishExternalTransfer_arg_to_protobuf, finishExternalTransfer_arg_from_protobuf
+
+let finishExternalTransfer_ret = transferStatus_to_protobuf, transferStatus_from_protobuf
+
 let finishExternalTransferOnRoot =
   Remote.registerRootCmdWithConnection
-    "finishExternalTransfer" finishExternalTransferLocal
+    "finishExternalTransfer" finishExternalTransfer_arg finishExternalTransfer_ret finishExternalTransferLocal
 
 let copyprogReg = Lwt_util.make_region 1
 
@@ -895,8 +957,14 @@ let transferFileLocal connFrom
                Lwt.return (`DONE (status, None))
              end)
 
+type transferFile_ret =
+  [ `DONE of transferStatus * string option [@key 1]
+  | `EXTERNAL of bool [@key 2]
+  ] [@@deriving protobuf]
+let transferFile_ret = transferFile_ret_to_protobuf, transferFile_ret_from_protobuf
+
 let transferFileOnRoot =
-  Remote.registerRootCmdWithConnection "transferFile" transferFileLocal
+  Remote.registerRootCmdWithConnection "transferFile" finishExternalTransfer_arg transferFile_ret transferFileLocal
 
 (* We limit the size of the output buffers to about 512 KB
    (we cannot go above the limit below plus 64) *)

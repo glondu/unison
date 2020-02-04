@@ -271,11 +271,18 @@ let archivesIdentical l =
     h::r -> h <> None && Safelist.for_all (fun h' -> h = h') r
   | _    -> true
 
+type archiveName_arg = archiveVersion [@@deriving protobuf]
+let archiveName_arg = archiveName_arg_to_protobuf, archiveName_arg_from_protobuf
+
+type archiveName_ret = string * string * bool [@@deriving protobuf]
+let archiveName_ret = archiveName_ret_to_protobuf, archiveName_ret_from_protobuf
+
 let (archiveNameOnRoot
        : Common.root ->  archiveVersion -> (string * string * bool) Lwt.t)
     =
   Remote.registerRootCmd
     "archiveName"
+    archiveName_arg archiveName_ret
       (fun (fspath, v) ->
        let (name,_) = archiveName fspath v in
        Lwt.return
@@ -390,7 +397,7 @@ let removeArchiveLocal ((fspath: Fspath.t), (v: archiveVersion)): unit Lwt.t =
 (* [removeArchiveOnRoot root v] invokes [removeArchive fspath v] on the
    server, where [fspath] is the path to root on the server *)
 let removeArchiveOnRoot: Common.root -> archiveVersion -> unit Lwt.t =
-  Remote.registerRootCmd "removeArchive" removeArchiveLocal
+  Remote.registerRootCmd "removeArchive" archiveName_arg Remote.punit removeArchiveLocal
 
 (* [commitArchive (fspath, ())] commits the archive for [fspath] by changing
    the filenames from ScratchArch-ones to a NewArch-ones *)
@@ -408,7 +415,7 @@ let commitArchiveLocal ((fspath: Fspath.t), ())
 (* [commitArchiveOnRoot root v] invokes [commitArchive fspath v] on the
    server, where [fspath] is the path to root on the server *)
 let commitArchiveOnRoot: Common.root -> unit -> unit Lwt.t =
-  Remote.registerRootCmd "commitArchive" commitArchiveLocal
+  Remote.registerRootCmd "commitArchive" Remote.punit Remote.punit commitArchiveLocal
 
 let archiveInfoCache = Hashtbl.create 7
 (* [postCommitArchive (fspath, v)] finishes the committing protocol by
@@ -447,7 +454,7 @@ let postCommitArchiveLocal (fspath,())
 (* [postCommitArchiveOnRoot root v] invokes [postCommitArchive fspath v] on
    the server, where [fspath] is the path to root on the server *)
 let postCommitArchiveOnRoot: Common.root -> unit -> unit Lwt.t =
-  Remote.registerRootCmd "postCommitArchive" postCommitArchiveLocal
+  Remote.registerRootCmd "postCommitArchive" Remote.punit Remote.punit postCommitArchiveLocal
 
 
 (*************************************************************************)
@@ -537,18 +544,20 @@ let dumpArchiveLocal (fspath,()) =
   Lwt.return ()
 
 let dumpArchiveOnRoot : Common.root -> unit -> unit Lwt.t =
-  Remote.registerRootCmd "dumpArchive" dumpArchiveLocal
+  Remote.registerRootCmd "dumpArchive" Remote.punit Remote.punit dumpArchiveLocal
 
 (*****************************************************************************)
 (*                          ARCHIVE CASE CONVERSION                          *)
 (*****************************************************************************)
 
+let dirChangedStamp = Props.(dirChangedStamp_to_protobuf, dirChangedStamp_from_protobuf)
+
 (* Stamp for marking unchange directories *)
 let dirStampKey : Props.dirChangedStamp Proplist.key =
-  Proplist.register "unchanged directory stamp"
+  Proplist.register "unchanged directory stamp" dirChangedStamp
 
 (* Property containing a description of the archive case sensitivity mode *)
-let caseKey : string Proplist.key = Proplist.register "case mode"
+let caseKey : string Proplist.key = Proplist.register "case mode" Remote.pstring
 
 (* Turn a case sensitive archive into a case insensitive archive.
    Directory children are resorted and duplicates are removed.
@@ -582,6 +591,7 @@ let makeCaseSensitive thisRoot =
 
 let makeCaseSensitiveOnRoot =
   Remote.registerRootCmd "makeCaseSensitive"
+    Remote.punit Remote.punit
     (fun (fspath, ()) ->
        makeCaseSensitive (thisRootsGlobalName fspath);
        Lwt.return ())
@@ -688,10 +698,14 @@ let clearArchiveData thisRoot =
   Hashtbl.remove archiveInfoCache thisRoot;
   Lwt.return (Some (0, ""))
 
+type loadArchive_ret = (int * string) option [@@deriving protobuf]
+let loadArchive_ret = loadArchive_ret_to_protobuf, loadArchive_ret_from_protobuf
+
 (* Load (main) root archive and cache it on the given server *)
 let loadArchiveOnRoot: Common.root -> bool -> (int * string) option Lwt.t =
   Remote.registerRootCmd
     "loadArchive"
+    Remote.pbool loadArchive_ret
     (fun (fspath, optimistic) ->
        let (arcName,thisRoot) = archiveName fspath MainArch in
        let arcFspath = Os.fileInUnisonDir arcName in
@@ -790,9 +804,14 @@ let lockArchiveLocal fspath =
     Some (Printf.sprintf "The file %s on host %s should be deleted"
             (System.fspathToPrintString lockFile) (Os.myCanonicalHostName ()))
 
+type lockArchive_ret = string option [@@deriving protobuf]
+let lockArchive_ret = lockArchive_ret_to_protobuf, lockArchive_ret_from_protobuf
+
 let lockArchiveOnRoot: Common.root -> unit -> string option Lwt.t =
   Remote.registerRootCmd
-    "lockArchive" (fun (fspath, ()) -> Lwt.return (lockArchiveLocal fspath))
+    "lockArchive"
+    Remote.punit lockArchive_ret
+    (fun (fspath, ()) -> Lwt.return (lockArchiveLocal fspath))
 
 let unlockArchiveLocal fspath =
   Lock.release
@@ -801,6 +820,7 @@ let unlockArchiveLocal fspath =
 let unlockArchiveOnRoot: Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "unlockArchive"
+    Remote.punit Remote.punit
     (fun (fspath, ()) -> Lwt.return (unlockArchiveLocal fspath))
 
 let ignorelocks =
@@ -882,9 +902,13 @@ let unlockArchives () =
      - otherwise, if some hosts have temporary archives, we delete them
 *)
 
+type archivesExist_ret = bool * bool [@@deriving protobuf]
+let archivesExist_ret = archivesExist_ret_to_protobuf, archivesExist_ret_from_protobuf
+
 let archivesExistOnRoot: Common.root -> unit -> (bool * bool) Lwt.t =
   Remote.registerRootCmd
     "archivesExist"
+    Remote.punit archivesExist_ret
     (fun (fspath,rootsName) ->
        let (oldname,_) = archiveName fspath MainArch in
        let oldexists =
@@ -1050,8 +1074,15 @@ let translatePathLocal fspath path =
   let (localPath, _) = getPathInArchive (getArchive root) Path.empty path in
   localPath
 
+type translatePath_arg = Path.t [@@deriving protobuf]
+let translatePath_arg = translatePath_arg_to_protobuf, translatePath_arg_from_protobuf
+
+type translatePath_ret = Path.local [@@deriving protobuf]
+let translatePath_ret = translatePath_ret_to_protobuf, translatePath_ret_from_protobuf
+
 let translatePath =
   Remote.registerRootCmd "translatePath"
+    translatePath_arg translatePath_ret
     (fun (fspath, path) -> Lwt.return (translatePathLocal fspath path))
 
 (***********************************************************************
@@ -1905,9 +1936,12 @@ let updatePredicates =
    ("ignore", Globals.ignorePred); ("ignorenot", Globals.ignorenotPred);
    ("follow", Path.followPred)]
 
+type predKey_typ = (string * string list) list [@@deriving protobuf]
+let predKey_typ = predKey_typ_to_protobuf, predKey_typ_from_protobuf
+
 let predKey : (string * string list) list Proplist.key =
-  Proplist.register "update predicates"
-let rsrcKey : bool Proplist.key = Proplist.register "rsrc pref"
+  Proplist.register "update predicates" predKey_typ
+let rsrcKey : bool Proplist.key = Proplist.register "rsrc pref" Remote.pbool
 
 let checkNoUpdatePredicateChange thisRoot =
   let props = getArchiveProps thisRoot in
@@ -2052,9 +2086,16 @@ Format.eprintf "Update detection: %f@." (t2 -. t1);
   abortIfAnyMountpointsAreMissing fspath;
   updates
 
+type find_arg = bool * Path.t list * (Path.t list * Path.t list) option [@@deriving protobuf]
+let find_arg = find_arg_to_protobuf, find_arg_from_protobuf
+
+type find_ret = (Path.local * Common.updateItem * Props.t list) list [@@deriving protobuf]
+let find_ret = find_ret_to_protobuf, find_ret_from_protobuf
+
 let findOnRoot =
   Remote.registerRootCmd
     "find"
+    find_arg find_ret
     (fun (fspath, (wantWatcher, pathList, subpaths)) ->
        Lwt.return (findLocal wantWatcher fspath pathList subpaths))
 
@@ -2128,8 +2169,14 @@ let prepareCommitLocal (fspath, magic) =
     (Os.fileInUnisonDir newName) root archive archiveHash magic props;
   Lwt.return (Some archiveHash)
 
+type prepareCommit_arg = string [@@deriving protobuf]
+let prepareCommit_arg = prepareCommit_arg_to_protobuf, prepareCommit_arg_from_protobuf
+
+type prepareCommit_ret = int option [@@deriving protobuf]
+let prepareCommit_ret = prepareCommit_ret_to_protobuf, prepareCommit_ret_from_protobuf
+
 let prepareCommitOnRoot
-   = Remote.registerRootCmd "prepareCommit" prepareCommitLocal
+   = Remote.registerRootCmd "prepareCommit" prepareCommit_arg prepareCommit_ret prepareCommitLocal
 
 (* To really commit, first prepare (write to scratch arch.), then make sure
    the checksum on all archives are equal, finally flip scratch to main.  In
@@ -2279,9 +2326,13 @@ let markEqualLocal fspath paths =
        archive := arch);
   setArchiveLocal root !archive
 
+type markEqual_arg = (Name.t, Common.updateContent) Tree.t [@@deriving protobuf]
+let markEqual_arg = markEqual_arg_to_protobuf, markEqual_arg_from_protobuf
+
 let markEqualOnRoot =
   Remote.registerRootCmd
     "markEqual"
+    markEqual_arg Remote.punit
     (fun (fspath, paths) -> markEqualLocal fspath paths; Lwt.return ())
 
 let markEqual equals =
@@ -2306,9 +2357,13 @@ let replaceArchiveLocal fspath path newArch =
     updatePathInArchive archive fspath Path.empty path (fun _ _ -> newArch) in
   setArchiveLocal root archive
 
+type replaceArchive_arg = Path.t * archive [@@deriving protobuf]
+let replaceArchive_arg = replaceArchive_arg_to_protobuf, replaceArchive_arg_from_protobuf
+
 let replaceArchiveOnRoot =
   Remote.registerRootCmd
     "replaceArchive"
+    replaceArchive_arg Remote.punit
     (fun (fspath, (pathTo, arch)) ->
        replaceArchiveLocal fspath pathTo arch;
        Lwt.return ())
@@ -2584,4 +2639,5 @@ let rec iterFiles fspath path arch f =
 let inspectFilesystem =
   Remote.registerRootCmd
     "inspectFilesystem"
+    Remote.punit (Proplist.to_protobuf, Proplist.from_protobuf)
     (fun _ -> Lwt.return Proplist.empty)

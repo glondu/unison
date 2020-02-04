@@ -492,6 +492,7 @@ let initBackupsLocal () =
 let initBackupsRoot: Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "initBackups"
+    Remote.punit Remote.punit
     (fun (fspath, ()) ->
       Lwt.return (initBackupsLocal ()))
 

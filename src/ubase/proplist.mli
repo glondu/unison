@@ -2,9 +2,9 @@
 (* Copyright 1999-2020, Benjamin C. Pierce (see COPYING for details) *)
 
 type 'a key
-type t
+type t [@@deriving protobuf]
 
-val register : string -> 'a key
+val register : string -> ('a -> Protobuf.Encoder.t -> unit) * (Protobuf.Decoder.t -> 'a) -> 'a key
 
 val empty : t
 val mem : 'a key -> t -> bool
