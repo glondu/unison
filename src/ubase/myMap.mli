@@ -27,7 +27,7 @@ Some functions have been added to suit Unison's needs.
 
 module type OrderedType =
   sig
-    type t
+    type t [@@deriving bin_io]
       (** The type of the map keys. *)
     val compare : t -> t -> int
       (** A total ordering function over the keys.
@@ -45,7 +45,7 @@ module type S =
     type key
     (** The type of the map keys. *)
 
-    type (+'a) t
+    type (+'a) t [@@deriving bin_io]
     (** The type of maps from type [key] to type ['a]. *)
 
     val empty: 'a t

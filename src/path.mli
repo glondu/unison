@@ -2,15 +2,15 @@
 (* Copyright 1999-2020, Benjamin C. Pierce (see COPYING for details) *)
 
 (* Abstract type of relative pathnames *)
-type 'a path
+type 'a path [@@deriving bin_io]
 
 (* Pathname valid on both replicas (case insensitive in case
    insensitive mode) *)
-type t = [`Global] path
+type t = [`Global] path [@@deriving bin_io]
 
 (* Pathname specialized to a replica (case sensitive on a case
    sensitive filesystem) *)
-type local = [`Local] path
+type local = [`Local] path [@@deriving bin_io]
 
 val empty : 'a path
 val length : t -> int

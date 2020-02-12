@@ -10,7 +10,7 @@ type 'a ressInfo [@@deriving bin_io]
 type ressStamp = unit ressInfo [@@deriving bin_io]
 type info =
   { ressInfo : (Fspath.t * int64) ressInfo;
-    finfo : string }
+    finfo : string } [@@deriving bin_io]
 
 val defaultInfos :  [> `DIRECTORY | `FILE ] -> info
 

@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (* Defines an abstract type of absolute filenames (fspaths).  Keeping the    *)
 (* type abstract lets us enforce some invariants which are important for     *)
@@ -33,7 +34,7 @@ module Fs = System_impl.Fs
 let debug = Util.debug "fspath"
 let debugverbose = Util.debug "fsspath+"
 
-type t = Fspath of string
+type t = Fspath of string [@@deriving bin_io]
 
 let toString (Fspath f) = f
 let toPrintString (Fspath f) = f

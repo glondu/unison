@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (* ---------------------------------------------------------------------- *)
 (* Choosing where messages go *)
@@ -166,8 +167,8 @@ let terse =
     ("When this preference is set to {\\tt true}, the user "
      ^ "interface will not print status messages.")
 
-type msgtype = Msg | StatusMajor | StatusMinor | Log
-type msg = msgtype * string
+type msgtype = Msg | StatusMajor | StatusMinor | Log [@@deriving bin_io]
+type msg = msgtype * string [@@deriving bin_io]
 
 let defaultMessageDisplayer s =
   if not (Prefs.read terse) then begin

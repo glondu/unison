@@ -15,10 +15,12 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 type ('a, 'b) t =
     Node of ('a * ('a, 'b) t) list * 'b option
   | Leaf of 'b
+[@@deriving bin_io]
 
 type ('a, 'b) u =
   { anc: (('a, 'b) u * 'a) option;

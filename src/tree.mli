@@ -6,6 +6,7 @@
 type ('a, 'b) t =
     Node of ('a * ('a, 'b) t) list * 'b option
   | Leaf of 'b
+[@@deriving bin_io]
 
 (* An "unfinished" tree                                                      *)
 type ('a, 'b) u

@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 let (>>=) = Lwt.bind
 
 let debug = Trace.debug "remote"
@@ -616,6 +618,7 @@ type header =
   | Request of string
   | Stream of string
   | StreamAbort
+[@@deriving bin_io]
 
 let ((marshalHeader, unmarshalHeader) : header marshalingFunctions) =
   makeMarshalingFunctions defaultMarshalingFunctions "rsp"

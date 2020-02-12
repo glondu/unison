@@ -1,6 +1,8 @@
 (* Unison file synchronizer: src/ubase/prefs.ml *)
 (* $I3: Copyright 1999-2002 (see COPYING for details) $ *)
 
+open Bin_prot.Std
+
 let debug = Util.debug "prefs"
 
 type 'a t =
@@ -78,7 +80,7 @@ let resetToDefaults () =
 (* created, a dumper (marshaler) and a loader (parser) are added to the list *)
 (* kept here...                                                              *)
 
-type dumpedPrefs = (string * bool * string) list
+type dumpedPrefs = (string * bool * string) list [@@deriving bin_io]
 
 let dumpers = ref ([] : (string * bool * (unit->string)) list)
 let loaders = ref (Util.StringMap.empty : (string->unit) Util.StringMap.t)

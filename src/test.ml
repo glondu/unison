@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 let (>>=) = Lwt.(>>=)
 
@@ -103,6 +104,7 @@ type fs =
   | File of string
   | Link of string
   | Dir of (string * fs) list
+[@@deriving bin_io]
 
 let rec equal fs1 fs2 =
   match fs1,fs2 with

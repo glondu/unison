@@ -3,7 +3,7 @@
 
 (* Defines an abstract type of absolute filenames (fspaths) *)
 
-type t
+type t [@@deriving bin_io]
 
 val child : t -> Name.t -> t
 val concat : t -> Path.local -> t

@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 type hostname = string
 
@@ -71,12 +72,14 @@ let sortRoots rootList = Safelist.sort compareRoots rootList
 type prevState =
     Previous of Fileinfo.typ * Props.t * Os.fullfingerprint * Osx.ressStamp
   | New
+[@@deriving bin_io]
 
 type contentschange =
     ContentsSame
   | ContentsUpdated of Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp
+[@@deriving bin_io]
 
-type permchange     = PropsSame    | PropsUpdated
+type permchange     = PropsSame    | PropsUpdated [@@deriving bin_io]
 
 type updateItem =
     NoUpdates                         (* Path not changed *)
@@ -85,6 +88,7 @@ type updateItem =
        * prevState                    (*   - summary of old state *)
   | Error                             (* Error while detecting updates *)
       of string                       (*   - description of error *)
+[@@deriving bin_io]
 
 and updateContent =
     Absent                            (* Path refers to nothing *)
@@ -99,6 +103,7 @@ and updateContent =
        * bool                         (*   - is the directory now empty? *)
   | Symlink                           (* Path refers to a symbolic link *)
       of string                       (*   - link text *)
+[@@deriving bin_io]
 
 (* ------------------------------------------------------------------------- *)
 

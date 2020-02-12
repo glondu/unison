@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 open Common
 let (>>=)  = Lwt.(>>=)
 
@@ -61,6 +63,7 @@ type archive =
   | ArchiveFile of Props.t * Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp
   | ArchiveSymlink of string
   | NoArchive
+[@@deriving bin_io]
 
 (* For directories, only the permissions part of the file description (desc)
    is used for synchronization at the moment. *)
@@ -171,7 +174,7 @@ let thisRootsGlobalName (fspath: Fspath.t): string =
 (* ----- *)
 
 (* The status of an archive *)
-type archiveVersion = MainArch | NewArch | ScratchArch | Lock | FPCache
+type archiveVersion = MainArch | NewArch | ScratchArch | Lock | FPCache [@@deriving bin_io]
 
 let showArchiveName =
   Prefs.createBool "showarchive" false

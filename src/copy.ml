@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 let (>>=) = Lwt.bind
 
 let debug = Trace.debug "copy"
@@ -172,6 +174,7 @@ type transferStatus =
     TransferSucceeded of Fileinfo.t
   | TransferNeedsDoubleCheckAgainstCurrentSource of Fileinfo.t * Os.fullfingerprint
   | TransferFailed of string
+[@@deriving bin_io]
 
 (* Paranoid check: recompute the transferred file's fingerprint to match it
    with the archive's.  If the old

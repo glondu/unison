@@ -15,16 +15,18 @@ Some functions have been added to suite Unison needs.
 (*                                                                     *)
 (***********************************************************************)
 
+open Bin_prot.Std
+
 module type OrderedType =
   sig
-    type t
+    type t [@@deriving bin_io]
     val compare: t -> t -> int
   end
 
 module type S =
   sig
     type key
-    type +'a t
+    type +'a t [@@deriving bin_io]
     val empty: 'a t
     val is_empty: 'a t -> bool
     val add: key -> 'a -> 'a t -> 'a t
@@ -44,11 +46,12 @@ module type S =
 
 module Make(Ord: OrderedType) = struct
 
-    type key = Ord.t
+    type key = Ord.t [@@deriving bin_io]
 
     type 'a t =
         Empty
       | Node of 'a t * key * 'a * 'a t * int
+    [@@deriving bin_io]
 
     let height = function
         Empty -> 0

@@ -15,12 +15,13 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (* Defines an abstract type of relative pathnames *)
 
-type 'a path = string
-type t = string
-type local = string
+type 'a path = string [@@deriving bin_io]
+type t = string [@@deriving bin_io]
+type local = string [@@deriving bin_io]
 
 let pathSeparatorChar = '/'
 let pathSeparatorString = "/"

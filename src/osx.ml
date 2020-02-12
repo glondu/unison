@@ -196,7 +196,7 @@ let ressStampToString r =
 
 type info =
   { ressInfo : (Fspath.t * int64) ressInfo;
-    finfo : string }
+    finfo : string } [@@deriving bin_io]
 
 external getFileInfosInternal :
   System.fspath -> bool -> string * int64 = "getFileInfos"

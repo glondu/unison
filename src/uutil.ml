@@ -89,7 +89,7 @@ end
 
 module File =
   struct
-    type t = int
+    type t = int [@@deriving bin_io]
     let dummy = -1
     let ofLine l = l
     let toLine l = assert (l <> dummy); l

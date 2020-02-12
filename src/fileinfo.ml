@@ -39,7 +39,7 @@ let init b =
     (Prefs.read allowSymlinks = `True ||
      (Prefs.read allowSymlinks = `Default && not b))
 
-type typ = [ `ABSENT | `FILE | `DIRECTORY | `SYMLINK ]
+type typ = [ `ABSENT | `FILE | `DIRECTORY | `SYMLINK ] [@@deriving bin_io]
 
 let type2string = function
     `ABSENT    -> "nonexistent"
@@ -47,7 +47,7 @@ let type2string = function
   | `DIRECTORY -> "dir"
   | `SYMLINK   -> "symlink"
 
-type t = { typ : typ; inode : int; desc : Props.t; osX : Osx.info}
+type t = { typ : typ; inode : int; desc : Props.t; osX : Osx.info} [@@deriving bin_io]
 
 (* Stat function that pays attention to pref for following links             *)
 let statFn fromRoot fspath path =

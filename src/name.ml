@@ -15,10 +15,11 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (* NOTE: IF YOU CHANGE TYPE "NAME", THE ARCHIVE FORMAT CHANGES;
    INCREMENT "UPDATE.ARCHIVEFORMAT" *)
-type t = string
+type t = string [@@deriving bin_io]
 
 let compare n1 n2 = (Case.ops())#compare n1 n2
 

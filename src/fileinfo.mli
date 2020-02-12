@@ -1,10 +1,10 @@
 (* Unison file synchronizer: src/fileinfo.mli *)
 (* Copyright 1999-2020, Benjamin C. Pierce (see COPYING for details) *)
 
-type typ = [`ABSENT | `FILE | `DIRECTORY | `SYMLINK]
+type typ = [`ABSENT | `FILE | `DIRECTORY | `SYMLINK] [@@deriving bin_io]
 val type2string : typ -> string
 
-type t = { typ : typ; inode : int; desc : Props.t; osX : Osx.info}
+type t = { typ : typ; inode : int; desc : Props.t; osX : Osx.info} [@@deriving bin_io]
 
 val get : bool (* fromRoot *) -> Fspath.t -> Path.local -> t
 val set : Fspath.t -> Path.local ->
