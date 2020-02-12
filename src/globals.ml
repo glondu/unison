@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 open Common
 
@@ -196,6 +197,7 @@ let expandWildcardPaths() =
 let propagatePrefsTo =
   Remote.registerHostCmd
     "installPrefs"
+    Prefs.bin_dumpedPrefs bin_unit
     (fun prefs -> return (Prefs.load prefs))
 
 let propagatePrefs () =

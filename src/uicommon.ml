@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 open Common
 open Lwt
 
@@ -439,7 +441,7 @@ let debug = Trace.debug "startup"
 
 (*FIX: remove when Unison version > 2.40 *)
 let _ =
-fun r x -> Remote.registerRootCmd "_unicodeCaseSensitive_" (fun _ -> Lwt.return ()) r x
+fun r x -> Remote.registerRootCmd "_unicodeCaseSensitive_" bin_unit bin_unit (fun _ -> Lwt.return ()) r x
 let supportUnicodeCaseSensitive () =
   if Uutil.myMajorVersion > "2.40" (* The test is correct until 2.99... *) then
     Lwt.return true
@@ -450,10 +452,13 @@ let supportUnicodeCaseSensitive () =
     Lwt.return (List.for_all (fun x -> x) l)
   end
 
+type architecture_ret = bool * bool * bool [@@deriving bin_io]
+
 (* Determine the case sensitivity of a root (does filename FOO==foo?) *)
 let architecture =
   Remote.registerRootCmd
     "architecture"
+    bin_unit bin_architecture_ret
     (fun (_,()) -> return (Util.osType = `Win32, Osx.isMacOSX, Util.isCygwin))
 
 (* During startup the client determines the case sensitivity of each root.

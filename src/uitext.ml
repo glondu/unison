@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 open Common
 open Lwt
 
@@ -1009,6 +1011,7 @@ module PathMap = Map.Make (Path)
 let waitForChangesRoot: Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "waitForChanges"
+    bin_unit bin_unit
     (fun (fspath, _) -> Fswatchold.wait (Update.archiveHash fspath))
 
 let waitForChanges t =

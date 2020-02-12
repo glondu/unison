@@ -160,6 +160,7 @@ let writefs p fs =
 let checkRootEmpty : Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "checkRootEmpty"
+    bin_unit bin_unit
     (fun (fspath, ()) ->
        if Os.exists fspath Path.empty then
          raise (Util.Fatal (Printf.sprintf
@@ -170,25 +171,31 @@ let checkRootEmpty : Common.root -> unit -> unit Lwt.t =
 let makeRootEmpty : Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "makeRootEmpty"
+    bin_unit bin_unit
     (fun (fspath, ()) ->
        remove_file_or_dir fspath;
        Lwt.return ())
 
+type getfs_ret = fs option [@@deriving bin_io]
+
 let getfs : Common.root -> unit -> (fs option) Lwt.t =
   Remote.registerRootCmd
     "getfs"
+    bin_unit bin_getfs_ret
     (fun (fspath, ()) ->
        Lwt.return (readfs fspath))
 
 let getbackup : Common.root -> unit -> (fs option) Lwt.t =
   Remote.registerRootCmd
     "getbackup"
+    bin_unit bin_getfs_ret
     (fun (fspath, ()) ->
        Lwt.return (readfs (Stasher.backupDirectory ())))
 
 let makeBackupEmpty : Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "makeBackupEmpty"
+    bin_unit bin_unit
     (fun (fspath, ()) ->
        let b = Stasher.backupDirectory () in
        debug (fun () -> Util.msg "Removing %s\n" (Fspath.toDebugString b));
@@ -197,6 +204,7 @@ let makeBackupEmpty : Common.root -> unit -> unit Lwt.t =
 let putfs : Common.root -> fs -> unit Lwt.t =
   Remote.registerRootCmd
     "putfs"
+    bin_fs bin_unit
     (fun (fspath, fs) ->
        writefs fspath fs;
        Lwt.return ())

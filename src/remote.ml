@@ -447,17 +447,20 @@ let registerTag string =
     registeredSet := Util.StringSet.add string !registeredSet;
   Bytearray.of_string string
 
-let defaultMarshalingFunctions =
+let makeMarshalingFunctionsFromBin bin_t =
+  let open Bin_prot.Common in
+  let open Bin_prot.Type_class in
   (fun data rem ->
-     let s = Bytearray.marshal data [Marshal.No_sharing] in
-     let l = Bytearray.length s in
+     let l = bin_t.writer.size data in
+     let s = create_buf l in
+     ignore (bin_t.writer.write s ~pos:0 data);
      ((s, 0, l) :: rem, l)),
   (fun buf pos ->
-      try Bytearray.unmarshal buf pos
-      with Failure s -> raise (Util.Fatal (Printf.sprintf 
-"Fatal error during unmarshaling (%s),
+      try bin_t.reader.read buf ~pos_ref:(ref pos)
+      with Read_error (err, err_pos) -> raise (Util.Fatal (Printf.sprintf
+"Fatal error during unmarshaling (%s at %d),
 possibly because client and server have been compiled with different\
-versions of the OCaml compiler." s)))
+versions of the OCaml compiler or bin_prot." (ReadError.to_string err) err_pos)))
 
 let makeMarshalingFunctions payloadMarshalingFunctions string =
   let (marshalPayload, unmarshalPayload) = payloadMarshalingFunctions in
@@ -621,7 +624,7 @@ type header =
 [@@deriving bin_io]
 
 let ((marshalHeader, unmarshalHeader) : header marshalingFunctions) =
-  makeMarshalingFunctions defaultMarshalingFunctions "rsp"
+  makeMarshalingFunctions (makeMarshalingFunctionsFromBin bin_header) "rsp"
 
 let processRequest conn id cmdName buf =
   let cmd =
@@ -792,9 +795,12 @@ let registerSpecialServerCmd
   in
   client
 
-let registerServerCmd name f =
+let registerServerCmd name binArg binRes f =
   registerSpecialServerCmd
-    name defaultMarshalingFunctions defaultMarshalingFunctions f
+    name
+    (makeMarshalingFunctionsFromBin binArg)
+    (makeMarshalingFunctionsFromBin binRes)
+    f
 
 (* RegisterHostCmd is a simpler version of registerClientServer [registerServerCmd?].
    It is used to create remote procedure calls: the only communication
@@ -806,10 +812,10 @@ let registerServerCmd name f =
    RegisterHostCmd recognizes the case where the server is the local
    host, and it avoids socket communication in this case.
 *)
-let registerHostCmd cmdName cmd =
+let registerHostCmd cmdName bArg bRet cmd =
   let serverSide = (fun _ args -> cmd args) in
   let client0 =
-    registerServerCmd cmdName serverSide in
+    registerServerCmd cmdName bArg bRet serverSide in
   let client host args =
     let conn = hostConnection host in
     client0 conn args in
@@ -826,15 +832,18 @@ let hostOfRoot root =
   | (Common.Remote host, _) -> host
 let connectionToRoot root = hostConnection (hostOfRoot root)
 
+type 'a with_fspath = Fspath.t * 'a [@@deriving bin_io]
+
 (* RegisterRootCmd is like registerHostCmd but it indexes connections by
    root instead of host. *)
-let registerRootCmd (cmdName : string) (cmd : (Fspath.t * 'a) -> 'b) =
-  let r = registerHostCmd cmdName cmd in
+let registerRootCmd (cmdName : string) bArg bRet (cmd : (Fspath.t * 'a) -> 'b) =
+  let bArg' = bin_with_fspath bArg in
+  let r = registerHostCmd cmdName bArg' bRet cmd in
   fun root args -> r (hostOfRoot root) ((snd root), args)
 
 let registerRootCmdWithConnection
-  (cmdName : string) (cmd : connection -> 'a -> 'b) =
-  let client0 = registerServerCmd cmdName cmd in
+  (cmdName : string) bArg bRet (cmd : connection -> 'a -> 'b) =
+  let client0 = registerServerCmd cmdName bArg bRet cmd in
   (* Return a function that runs either the proxy or the local version,
      depending on whether the call is to the local host or a remote one *)
   fun localRoot remoteRoot args ->
@@ -860,11 +869,11 @@ let registerStreamCmd
     =
   let cmd =
     registerSpecialServerCmd
-      cmdName marshalingFunctionsArgs defaultMarshalingFunctions
+      cmdName marshalingFunctionsArgs (makeMarshalingFunctionsFromBin bin_unit)
       (fun conn v -> serverSide conn v; Lwt.return ())
   in
   let ping =
-    registerServerCmd (cmdName ^ "Ping")
+    registerServerCmd (cmdName ^ "Ping") bin_int bin_unit
       (fun conn (id : int) ->
          try
            let e = Hashtbl.find streamError id in
@@ -915,6 +924,7 @@ let registerStreamCmd
 
 let commandAvailable =
   registerRootCmd "commandAvailable"
+    bin_string bin_bool
     (fun (_, cmdName) -> Lwt.return (Util.StringMap.mem cmdName !serverCmds))
 
 (****************************************************************************
@@ -987,7 +997,7 @@ let negociateFlowControlLocal conn () =
   Lwt.return false
 
 let negociateFlowControlRemote =
-  registerServerCmd "negociateFlowControl" negociateFlowControlLocal
+  registerServerCmd "negociateFlowControl" bin_unit bin_bool negociateFlowControlLocal
 
 let negociateFlowControl conn =
   (* Flow control negociation can be done asynchronously. *)
@@ -1194,8 +1204,12 @@ let canonizeLocally s unicode =
   Fs.setUnicodeEncoding unicode;
   Fspath.canonize s
 
+type canonizeOnServer_arg = string option * bool [@@deriving bin_io]
+type canonizeOnServer_ret = string * Fspath.t [@@deriving bin_io]
+
 let canonizeOnServer =
   registerServerCmd "canonizeOnServer"
+    bin_canonizeOnServer_arg bin_canonizeOnServer_ret
     (fun _ (s, unicode) ->
        Lwt.return (Os.myCanonicalHostName (), canonizeLocally s unicode))
 
@@ -1402,11 +1416,13 @@ let openConnectionCancel (i1,i2,o1,o2,s,fdopt,clroot,pid) =
 let showWarningOnClient =
     (registerServerCmd
        "showWarningOnClient"
+       bin_string bin_unit
        (fun _ str -> Lwt.return (Util.warn str)))
 
 let forwardMsgToClient =
     (registerServerCmd
        "forwardMsgToClient"
+       Trace.bin_msg bin_unit
        (fun _ str -> (*msg "forwardMsgToClient: %s\n" str; *)
           Lwt.return (Trace.displayMessageLocally str)))
 

@@ -272,11 +272,14 @@ let archivesIdentical l =
     h::r -> h <> None && Safelist.for_all (fun h' -> h = h') r
   | _    -> true
 
+type archiveName_ret = string * string * bool [@@deriving bin_io]
+
 let (archiveNameOnRoot
        : Common.root ->  archiveVersion -> (string * string * bool) Lwt.t)
     =
   Remote.registerRootCmd
     "archiveName"
+    bin_archiveVersion bin_archiveName_ret
       (fun (fspath, v) ->
        let (name,_) = archiveName fspath v in
        Lwt.return
@@ -391,7 +394,7 @@ let removeArchiveLocal ((fspath: Fspath.t), (v: archiveVersion)): unit Lwt.t =
 (* [removeArchiveOnRoot root v] invokes [removeArchive fspath v] on the
    server, where [fspath] is the path to root on the server *)
 let removeArchiveOnRoot: Common.root -> archiveVersion -> unit Lwt.t =
-  Remote.registerRootCmd "removeArchive" removeArchiveLocal
+  Remote.registerRootCmd "removeArchive" bin_archiveVersion bin_unit removeArchiveLocal
 
 (* [commitArchive (fspath, ())] commits the archive for [fspath] by changing
    the filenames from ScratchArch-ones to a NewArch-ones *)
@@ -409,7 +412,7 @@ let commitArchiveLocal ((fspath: Fspath.t), ())
 (* [commitArchiveOnRoot root v] invokes [commitArchive fspath v] on the
    server, where [fspath] is the path to root on the server *)
 let commitArchiveOnRoot: Common.root -> unit -> unit Lwt.t =
-  Remote.registerRootCmd "commitArchive" commitArchiveLocal
+  Remote.registerRootCmd "commitArchive" bin_unit bin_unit commitArchiveLocal
 
 let archiveInfoCache = Hashtbl.create 7
 (* [postCommitArchive (fspath, v)] finishes the committing protocol by
@@ -448,7 +451,7 @@ let postCommitArchiveLocal (fspath,())
 (* [postCommitArchiveOnRoot root v] invokes [postCommitArchive fspath v] on
    the server, where [fspath] is the path to root on the server *)
 let postCommitArchiveOnRoot: Common.root -> unit -> unit Lwt.t =
-  Remote.registerRootCmd "postCommitArchive" postCommitArchiveLocal
+  Remote.registerRootCmd "postCommitArchive" bin_unit bin_unit postCommitArchiveLocal
 
 
 (*************************************************************************)
@@ -538,7 +541,7 @@ let dumpArchiveLocal (fspath,()) =
   Lwt.return ()
 
 let dumpArchiveOnRoot : Common.root -> unit -> unit Lwt.t =
-  Remote.registerRootCmd "dumpArchive" dumpArchiveLocal
+  Remote.registerRootCmd "dumpArchive" bin_unit bin_unit dumpArchiveLocal
 
 (*****************************************************************************)
 (*                          ARCHIVE CASE CONVERSION                          *)
@@ -583,6 +586,7 @@ let makeCaseSensitive thisRoot =
 
 let makeCaseSensitiveOnRoot =
   Remote.registerRootCmd "makeCaseSensitive"
+    bin_unit bin_unit
     (fun (fspath, ()) ->
        makeCaseSensitive (thisRootsGlobalName fspath);
        Lwt.return ())
@@ -689,10 +693,13 @@ let clearArchiveData thisRoot =
   Hashtbl.remove archiveInfoCache thisRoot;
   Lwt.return (Some (0, ""))
 
+type loadArchive_ret = (int * string) option [@@deriving bin_io]
+
 (* Load (main) root archive and cache it on the given server *)
 let loadArchiveOnRoot: Common.root -> bool -> (int * string) option Lwt.t =
   Remote.registerRootCmd
     "loadArchive"
+    bin_bool bin_loadArchive_ret
     (fun (fspath, optimistic) ->
        let (arcName,thisRoot) = archiveName fspath MainArch in
        let arcFspath = Os.fileInUnisonDir arcName in
@@ -791,9 +798,11 @@ let lockArchiveLocal fspath =
     Some (Printf.sprintf "The file %s on host %s should be deleted"
             (System.fspathToPrintString lockFile) (Os.myCanonicalHostName ()))
 
+type lockArchive_ret = string option [@@deriving bin_io]
+
 let lockArchiveOnRoot: Common.root -> unit -> string option Lwt.t =
   Remote.registerRootCmd
-    "lockArchive" (fun (fspath, ()) -> Lwt.return (lockArchiveLocal fspath))
+    "lockArchive" bin_unit bin_lockArchive_ret (fun (fspath, ()) -> Lwt.return (lockArchiveLocal fspath))
 
 let unlockArchiveLocal fspath =
   Lock.release
@@ -802,6 +811,7 @@ let unlockArchiveLocal fspath =
 let unlockArchiveOnRoot: Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "unlockArchive"
+    bin_unit bin_unit
     (fun (fspath, ()) -> Lwt.return (unlockArchiveLocal fspath))
 
 let ignorelocks =
@@ -883,9 +893,12 @@ let unlockArchives () =
      - otherwise, if some hosts have temporary archives, we delete them
 *)
 
+type archivesExist_ret = bool * bool [@@deriving bin_io]
+
 let archivesExistOnRoot: Common.root -> unit -> (bool * bool) Lwt.t =
   Remote.registerRootCmd
     "archivesExist"
+    bin_unit bin_archivesExist_ret
     (fun (fspath,rootsName) ->
        let (oldname,_) = archiveName fspath MainArch in
        let oldexists =
@@ -1053,6 +1066,7 @@ let translatePathLocal fspath path =
 
 let translatePath =
   Remote.registerRootCmd "translatePath"
+    Path.bin_t Path.bin_local
     (fun (fspath, path) -> Lwt.return (translatePathLocal fspath path))
 
 (***********************************************************************
@@ -2055,9 +2069,13 @@ Format.eprintf "Update detection: %f@." (t2 -. t1);
   abortIfAnyMountpointsAreMissing fspath;
   updates
 
+type find_arg = bool * Path.t list * (Path.t list * Path.t list) option [@@deriving bin_io]
+type find_ret = (Path.local * Common.updateItem * Props.t list) list [@@deriving bin_io]
+
 let findOnRoot =
   Remote.registerRootCmd
     "find"
+    bin_find_arg bin_find_ret
     (fun (fspath, (wantWatcher, pathList, subpaths)) ->
        Lwt.return (findLocal wantWatcher fspath pathList subpaths))
 
@@ -2131,8 +2149,10 @@ let prepareCommitLocal (fspath, magic) =
     (Os.fileInUnisonDir newName) root archive archiveHash magic props;
   Lwt.return (Some archiveHash)
 
+type prepareCommit_ret = int option [@@deriving bin_io]
+
 let prepareCommitOnRoot
-   = Remote.registerRootCmd "prepareCommit" prepareCommitLocal
+   = Remote.registerRootCmd "prepareCommit" bin_string bin_prepareCommit_ret prepareCommitLocal
 
 (* To really commit, first prepare (write to scratch arch.), then make sure
    the checksum on all archives are equal, finally flip scratch to main.  In
@@ -2282,9 +2302,12 @@ let markEqualLocal fspath paths =
        archive := arch);
   setArchiveLocal root !archive
 
+type markEqual_arg = (Name.t, Common.updateContent) Tree.t [@@deriving bin_io]
+
 let markEqualOnRoot =
   Remote.registerRootCmd
     "markEqual"
+    bin_markEqual_arg bin_unit
     (fun (fspath, paths) -> markEqualLocal fspath paths; Lwt.return ())
 
 let markEqual equals =
@@ -2309,9 +2332,12 @@ let replaceArchiveLocal fspath path newArch =
     updatePathInArchive archive fspath Path.empty path (fun _ _ -> newArch) in
   setArchiveLocal root archive
 
+type replaceArchive_arg = Path.t * archive [@@deriving bin_io]
+
 let replaceArchiveOnRoot =
   Remote.registerRootCmd
     "replaceArchive"
+    bin_replaceArchive_arg bin_unit
     (fun (fspath, (pathTo, arch)) ->
        replaceArchiveLocal fspath pathTo arch;
        Lwt.return ())
@@ -2587,4 +2613,5 @@ let rec iterFiles fspath path arch f =
 let inspectFilesystem =
   Remote.registerRootCmd
     "inspectFilesystem"
+    bin_unit Proplist.bin_t
     (fun _ -> Lwt.return Proplist.empty)

@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 open Common
 open Lwt
@@ -73,7 +74,7 @@ let processCommitLog () =
     Lwt.return ()
 
 let processCommitLogOnHost =
-  Remote.registerHostCmd "processCommitLog" processCommitLog
+  Remote.registerHostCmd "processCommitLog" bin_unit bin_unit processCommitLog
 
 let processCommitLogs() =
   Lwt_unix.run
@@ -135,7 +136,9 @@ let deleteLocal (fspathTo, (pathTo, ui, notDefault)) =
   Update.replaceArchiveLocal fspathTo localPathTo Update.NoArchive;
   Lwt.return ()
 
-let deleteOnRoot = Remote.registerRootCmd "delete" deleteLocal
+type delete_arg = Path.t * Common.updateItem * bool [@@deriving bin_io]
+
+let deleteOnRoot = Remote.registerRootCmd "delete" bin_delete_arg bin_unit deleteLocal
 
 let delete rootFrom pathFrom rootTo pathTo ui notDefault =
   deleteOnRoot rootTo (pathTo, ui, notDefault) >>= fun _ ->
@@ -159,11 +162,16 @@ let setPropLocal (fspath, (path, ui, newDesc, oldDesc)) =
   Update.updateProps fspath localPath (Some newDesc) ui;
   Lwt.return ()
 
-let setPropOnRoot = Remote.registerRootCmd "setProp" setPropLocal
+type setProp_arg = Path.t * Common.updateItem * Props.t * Props.t [@@deriving bin_io]
+
+let setPropOnRoot = Remote.registerRootCmd "setProp" bin_setProp_arg bin_unit setPropLocal
+
+type updateProps_arg = Path.t * Props.t option * Common.updateItem [@@deriving bin_io]
 
 let updatePropsOnRoot =
   Remote.registerRootCmd
    "updateProps"
+   bin_updateProps_arg bin_unit
      (fun (fspath, (path, propOpt, ui)) ->
         let localPath = Update.translatePathLocal fspath path in
         (* Archive update must be done first *)
@@ -190,9 +198,13 @@ let setProp rootFrom pathFrom rootTo pathTo newDesc oldDesc uiFrom uiTo =
 
 (* ------------------------------------------------------------ *)
 
+type mkdir_arg = Fspath.t * Path.local [@@deriving bin_io]
+type mkdir_ret = bool * Props.t [@@deriving bin_io]
+
 let mkdirOnRoot =
   Remote.registerRootCmd
     "mkdir"
+    bin_mkdir_arg bin_mkdir_ret
     (fun (fspath,(workingDir,path)) ->
        let info = Fileinfo.get false workingDir path in
        if info.Fileinfo.typ = `DIRECTORY then begin
@@ -209,16 +221,22 @@ let mkdirOnRoot =
          Lwt.return (false, (Fileinfo.get false workingDir path).Fileinfo.desc)
        end)
 
+type setDirProp_arg = Fspath.t * Path.local * Props.t * Props.t [@@deriving bin_io]
+
 let setDirPropOnRoot =
   Remote.registerRootCmd
     "setDirProp"
+    bin_setDirProp_arg bin_unit
     (fun (_, (workingDir, path, initialDesc, newDesc)) ->
       Fileinfo.set workingDir path (`Set initialDesc) newDesc;
       Lwt.return ())
 
+type makeSymlink_arg = Fspath.t * Path.local * string [@@deriving bin_io]
+
 let makeSymlink =
   Remote.registerRootCmd
     "makeSymlink"
+    bin_makeSymlink_arg bin_unit
     (fun (fspath, (workingDir, path, l)) ->
        if Os.exists workingDir path then
          Os.delete workingDir path;
@@ -336,7 +354,17 @@ let renameLocal
   end;
   Lwt.return ()
 
-let renameOnHost = Remote.registerRootCmd "rename" renameLocal
+type rename_arg =
+  Path.local
+  * Fspath.t
+  * Path.local
+  * Path.local
+  * Common.updateItem
+  * Update.archive option
+  * bool
+[@@deriving bin_io]
+
+let renameOnHost = Remote.registerRootCmd "rename" bin_rename_arg bin_unit renameLocal
 
 let rename root localPath workingDir pathOld pathNew ui archOpt notDefault =
   debug (fun() ->
@@ -371,8 +399,10 @@ let setupTargetPathsLocal (fspath, path) =
   let tempPath = Os.tempPath ~fresh:false workingDir realPath in
   Lwt.return (workingDir, realPath, tempPath, localPath)
 
+type setupTargetPaths_ret = Fspath.t * Path.local * Path.local * Path.local [@@deriving bin_io]
+
 let setupTargetPaths =
-  Remote.registerRootCmd "setupTargetPaths" setupTargetPathsLocal
+  Remote.registerRootCmd "setupTargetPaths" Path.bin_t bin_setupTargetPaths_ret setupTargetPathsLocal
 
 let rec createDirectories fspath localPath props =
   match props with
@@ -401,8 +431,13 @@ let setupTargetPathsAndCreateParentDirectoryLocal (fspath, (path, props)) =
   let tempPath = Os.tempPath ~fresh:false workingDir realPath in
   Lwt.return (workingDir, realPath, tempPath, localPath)
 
+type setupTargetPathsAndCreateParentDirectory_arg = Path.t * Props.t list [@@deriving bin_io]
+type setupTargetPathsAndCreateParentDirectory_ret = Fspath.t * Path.local * Path.local * Path.local [@@deriving bin_io]
+
 let setupTargetPathsAndCreateParentDirectory =
   Remote.registerRootCmd "setupTargetPathsAndCreateParentDirectory"
+    bin_setupTargetPathsAndCreateParentDirectory_arg
+    bin_setupTargetPathsAndCreateParentDirectory_ret
     setupTargetPathsAndCreateParentDirectoryLocal
 
 (* ------------------------------------------------------------ *)
@@ -423,8 +458,10 @@ let updateSourceArchiveLocal (fspathFrom, (localPathFrom, uiFrom, errPaths)) =
   Stasher.stashCurrentVersion fspathFrom localPathFrom None;
   Lwt.return ()
 
+type updateSourceArchive_arg = Path.local * Common.updateItem * Path.local list [@@deriving bin_io]
+
 let updateSourceArchive =
-  Remote.registerRootCmd "updateSourceArchive" updateSourceArchiveLocal
+  Remote.registerRootCmd "updateSourceArchive" bin_updateSourceArchive_arg bin_unit updateSourceArchiveLocal
 
 (* ------------------------------------------------------------ *)
 
@@ -459,8 +496,10 @@ let deleteSpuriousChildrenLocal (_, (fspathTo, pathTo, archChildren)) =
     (List.sort Name.compare (Os.childrenOf fspathTo pathTo));
   Lwt.return ()
 
+type deleteSpuriousChildren_arg = Fspath.t * Path.local * Name.t list [@@deriving bin_io]
+
 let deleteSpuriousChildren =
-  Remote.registerRootCmd "deleteSpuriousChildren" deleteSpuriousChildrenLocal
+  Remote.registerRootCmd "deleteSpuriousChildren" bin_deleteSpuriousChildren_arg bin_unit deleteSpuriousChildrenLocal
 
 let rec normalizeProps propsFrom propsTo =
   match propsFrom, propsTo with

@@ -103,9 +103,20 @@ let checkForChangesToSourceLocal
            Transfer aborted."
           (Fspath.toPrintString (Fspath.concat fspathFrom pathFrom))))
 
+type checkForChangesToSource_arg =
+  Path.local
+  * Props.t
+  * Os.fullfingerprint
+  * Fileinfo.stamp option
+  * Osx.ressStamp
+  * Os.fullfingerprint option
+  * bool
+[@@deriving bin_io]
+
 let checkForChangesToSourceOnRoot =
   Remote.registerRootCmd
     "checkForChangesToSource"
+    bin_checkForChangesToSource_arg bin_unit
     (fun (fspathFrom,
           (pathFrom, archDesc, archFp, archStamp, archRess, newFpOpt, paranoid)) ->
       checkForChangesToSourceLocal
@@ -145,9 +156,13 @@ let rec fingerprintPrefix fspath path offset len accu =
       (fp :: accu)
   end
 
+type fingerprintSubfile_arg = Fspath.t * Path.local * Uutil.Filesize.t [@@deriving bin_io]
+type fingerprintSubfile_ret = Fingerprint.t list [@@deriving bin_io]
+
 let fingerprintPrefixRemotely =
   Remote.registerServerCmd
     "fingerprintSubfile"
+    bin_fingerprintSubfile_arg bin_fingerprintSubfile_ret
     (fun _ (fspath, path, len) ->
        Lwt.return (fingerprintPrefix fspath path 0L len []))
 
@@ -220,8 +235,10 @@ let saveTempFileLocal (fspathTo, (pathTo, realPathTo, reason)) =
         reason
         (Fspath.toDebugString (Fspath.concat fspathTo savepath))))
 
+type saveTempFile_arg = Path.local * Path.local * string [@@deriving bin_io]
+
 let saveTempFileOnRoot =
-  Remote.registerRootCmd "saveTempFile" saveTempFileLocal
+  Remote.registerRootCmd "saveTempFile" bin_saveTempFile_arg Fileinfo.bin_t saveTempFileLocal
 
 (****)
 
@@ -464,7 +481,23 @@ let compress conn
        Util.convertUnixErrorsToTransient "transferring file contents"
          (fun () -> raise e))
 
-let compressRemotely = Remote.registerServerCmd "compress" compress
+type data_arg =
+  [ `DATA
+  | `DATA_APPEND of Uutil.Filesize.t
+  | `RESS ]
+[@@deriving bin_io]
+
+type compress_arg =
+  Transfer.Rsync.rsync_block_info option
+  * Fspath.t
+  * Path.local
+  * data_arg
+  * Uutil.Filesize.t
+  * Uutil.File.t
+  * int
+[@@deriving bin_io]
+
+let compressRemotely = Remote.registerServerCmd "compress" bin_compress_arg bin_unit compress
 
 let close_all infd outfd =
   Util.convertUnixErrorsToTransient
@@ -808,9 +841,27 @@ let finishExternalTransferLocal connFrom
   Xferhint.insertEntry fspathTo pathTo fp;
   Lwt.return res
 
+type copyOrUpdate =
+  [ `Copy
+  | `Update of Uutil.Filesize.t * Uutil.Filesize.t ]
+[@@deriving bin_io]
+
+type finishExternalTransfer_arg =
+  Fspath.t
+  * Path.local
+  * Fspath.t
+  * Path.local
+  * Path.local
+  * copyOrUpdate
+  * Props.t
+  * Os.fullfingerprint
+  * Osx.ressStamp
+  * Uutil.File.t
+[@@deriving bin_io]
+
 let finishExternalTransferOnRoot =
   Remote.registerRootCmdWithConnection
-    "finishExternalTransfer" finishExternalTransferLocal
+    "finishExternalTransfer" bin_finishExternalTransfer_arg bin_transferStatus finishExternalTransferLocal
 
 let copyprogReg = Lwt_util.make_region 1
 
@@ -897,8 +948,13 @@ let transferFileLocal connFrom
                Lwt.return (`DONE (status, None))
              end)
 
+type transferFile_ret =
+  [ `DONE of transferStatus * string option
+  | `EXTERNAL of bool ]
+[@@deriving bin_io]
+
 let transferFileOnRoot =
-  Remote.registerRootCmdWithConnection "transferFile" transferFileLocal
+  Remote.registerRootCmdWithConnection "transferFile" bin_finishExternalTransfer_arg bin_transferFile_ret transferFileLocal
 
 (* We limit the size of the output buffers to about 512 KB
    (we cannot go above the limit below plus 64) *)

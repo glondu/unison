@@ -16,6 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (* --------------------------------------------------------------------------*)
 (* Preferences for backing up and stashing *)
@@ -492,6 +493,7 @@ let initBackupsLocal () =
 let initBackupsRoot: Common.root -> unit -> unit Lwt.t =
   Remote.registerRootCmd
     "initBackups"
+    bin_unit bin_unit
     (fun (fspath, ()) ->
       Lwt.return (initBackupsLocal ()))
 
