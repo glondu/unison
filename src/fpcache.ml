@@ -79,22 +79,30 @@ let read st ic =
   (* I/O errors are dealt with at a higher level *)
   let fp1 = Digest.input ic in
   let fp2 = Digest.input ic in
-  let headerSize = Marshal.header_size in
+  let headerSize = Bin_prot.Utils.size_header_length in
   let header = Bytes.create headerSize in
   really_input ic header 0 headerSize;
   if fp1 <> Digest.bytes header then begin
     debug (fun () -> Util.msg "bad header checksum\n");
     raise End_of_file
   end;
-  let dataSize = Marshal.data_size header 0 in
-  let s = Bytes.create (headerSize + dataSize) in
+  let headerBuf = Bin_prot.Common.create_buf headerSize in
+  Bin_prot.Common.unsafe_blit_bytes_buf ~src_pos:0 header ~dst_pos:0 headerBuf ~len:headerSize;
+  let pos_ref = ref 0 in
+  let dataSize = Bin_prot.Utils.bin_read_size_header headerBuf ~pos_ref in
+  assert (!pos_ref = headerSize);
+  let fullSize = headerSize + dataSize in
+  let s = Bytes.create fullSize in
   Bytes.blit header 0 s 0 headerSize;
   really_input ic s headerSize dataSize;
   if fp2 <> Digest.bytes s then begin
     debug (fun () -> Util.msg "bad chunk checksum\n");
     raise End_of_file
   end;
-  let q : entry list = Marshal.from_bytes s 0 in
+  let sBuf = Bin_prot.Common.create_buf fullSize in
+  Bin_prot.Common.unsafe_blit_bytes_buf ~src_pos:0 s ~dst_pos:0 sBuf ~len:fullSize;
+  let q = bin_read_entry_list sBuf ~pos_ref in
+  assert (!pos_ref = fullSize);
   debug (fun () -> Util.msg "read chunk of %d files\n" (List.length q));
   List.iter (fun (l, p, i) -> PathTbl.add tbl (decompress st l p) i) q
 
@@ -107,12 +115,21 @@ let closeOut st =
 
 let write state =
   let q = Safelist.rev state.queue in
-  let s = Marshal.to_string q [Marshal.No_sharing] in
-  let fp1 = Digest.substring s 0 Marshal.header_size in
-  let fp2 = Digest.string s in
+  let headerSize = Bin_prot.Utils.size_header_length in
+  let dataSize = bin_size_entry_list q in
+  let fullSize = headerSize + dataSize in
+  let buf = Bin_prot.Common.create_buf fullSize in
+  let pos = Bin_prot.Utils.bin_write_size_header buf ~pos:0 dataSize in
+  assert (pos = headerSize);
+  let pos = bin_write_entry_list buf ~pos q in
+  assert (pos = fullSize);
+  let s = Bytes.create fullSize in
+  Bin_prot.Common.unsafe_blit_buf_bytes ~src_pos:0 buf ~dst_pos:0 s ~len:fullSize;
+  let fp1 = Digest.subbytes s 0 headerSize in
+  let fp2 = Digest.bytes s in
   begin try
     Digest.output state.oc fp1; Digest.output state.oc fp2;
-    output_string state.oc s; flush state.oc
+    output_bytes state.oc s; flush state.oc
   with Sys_error error ->
     debug (fun () -> Util.msg "error in writing to cache file: %s\n" error);
     closeOut state
@@ -132,7 +149,7 @@ let finish () =
                closeOut st
   | None    -> ()
 
-let magic = "Unison fingerprint cache format 2"
+let magic = "Unison fingerprint cache format 3"
 
 let init fastCheck ignorearchives fspath =
   finish ();
