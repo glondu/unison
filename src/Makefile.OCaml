@@ -98,7 +98,7 @@ buildexecutable::
 ### Default parameters
 
 # Generate backtrace information for exceptions
-CAMLFLAGS+=-g
+CAMLFLAGS+=-g -package ppx_bin_prot
 
 INCLFLAGS=-I lwt -I ubase -I system
 CAMLFLAGS+=$(INCLFLAGS)
@@ -216,7 +216,7 @@ OCAMLOBJS+=main.cmo
 
 # OCaml libraries for the bytecode version
 # File extensions will be substituted for the native code version
-OCAMLLIBS+=unix.cma str.cma bigarray.cma
+OCAMLLIBS+=str.cma
 
 COBJS+=osxsupport$(OBJ_EXT) pty$(OBJ_EXT) bytearray_stubs$(OBJ_EXT)
 
@@ -357,9 +357,9 @@ endif
 ifeq ($(PROFILING), true)
   OCAMLC=$(EXEC_PREFIX)ocamlcp
 else
-  OCAMLC=$(EXEC_PREFIX)ocamlc
+  OCAMLC=$(OCAMLFIND) ocamlc
 endif
-OCAMLOPT=$(EXEC_PREFIX)ocamlopt
+OCAMLOPT=$(OCAMLFIND) ocamlopt
 
 ifeq ($(NATIVE), true)
   ## Set up for native code compilation
@@ -417,7 +417,7 @@ fswatch.cmi : ubase/prefs.cmi
 
 $(NAME)$(EXEC_EXT): $(CAMLOBJS) $(COBJS)
 	@echo Linking $@
-	$(CAMLC) -verbose $(CAMLFLAGS) -o $@ $(CFLAGS) $(CAMLLIBS) $^ $(CLIBS)
+	$(CAMLC) -verbose $(CAMLFLAGS) -linkpkg -o $@ $(CFLAGS) $(CAMLLIBS) $^ $(CLIBS)
 
 # Unfortunately -output-obj does not put .o files into the output, only .cmx
 # files, so we have to use $(LD) to take care of COBJS.
