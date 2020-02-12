@@ -15,9 +15,11 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 (* NOTE: IF YOU CHANGE TYPE "FINGERPRINT", THE ARCHIVE FORMAT CHANGES;       *)
 (* INCREMENT "UPDATE.ARCHIVEFORMAT"                                          *)
-type t = string
+type t = string [@@deriving bin_io]
 
 let pseudo_prefix = "LEN"
 

@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 let debugV = Util.debug "fileinfo+"
 
@@ -147,6 +148,7 @@ type stamp =
       ctime of the old file.  It is slightly harmful performancewise, as
       fastcheck expects ctime to be preserved by renaming.  Thus, we should
       probably not use any stamp under Windows. *)
+[@@deriving bin_io]
 
 let ignoreInodeNumbers =
   Prefs.createBool "ignoreinodenumbers" false

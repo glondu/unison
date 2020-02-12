@@ -20,6 +20,8 @@ See
 http://www.opensource.apple.com/source/copyfile/copyfile-42/copyfile.c
 *)
 
+open Bin_prot.Std
+
 let debug = Trace.debug "osx"
 
 (****)
@@ -178,8 +180,9 @@ type 'a ressInfo =
     NoRess
   | HfsRess of Uutil.Filesize.t
   | AppleDoubleRess of int * float * float * Uutil.Filesize.t * 'a
+[@@deriving bin_io]
 
-type ressStamp = unit ressInfo
+type ressStamp = unit ressInfo [@@deriving bin_io]
 
 let ressStampToString r =
   match r with

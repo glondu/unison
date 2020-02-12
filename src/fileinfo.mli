@@ -16,6 +16,7 @@ val get' : System.fspath -> t
 type stamp =
     InodeStamp of int         (* inode number, for Unix systems *)
   | CtimeStamp of float       (* creation time, for windows systems *)
+[@@deriving bin_io]
 
 val stamp : t -> stamp
 

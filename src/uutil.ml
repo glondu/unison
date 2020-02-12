@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (*****************************************************************************)
 (*                      Unison name and version                              *)
@@ -43,7 +44,7 @@ let hash x = hash_param 10 100 x
 (*****************************************************************************)
 
 module type FILESIZE = sig
-  type t
+  type t [@@deriving bin_io]
   val zero : t
   val dummy : t
   val add : t -> t -> t
@@ -61,7 +62,7 @@ module type FILESIZE = sig
 end
 
 module Filesize : FILESIZE = struct
-  type t = int64
+  type t = int64 [@@deriving bin_io]
   let zero = 0L
   let dummy = -1L
   let add = Int64.add

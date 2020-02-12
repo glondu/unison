@@ -3,7 +3,7 @@
 
 (* File properties: time, permission, length, etc. *)
 
-type t
+type t [@@deriving bin_io]
 val dummy : t
 val hash : t -> int -> int
 val similar : t -> t -> bool

@@ -6,8 +6,8 @@ val isMacOSX : bool
 
 val rsrc : bool Prefs.t
 
-type 'a ressInfo
-type ressStamp = unit ressInfo
+type 'a ressInfo [@@deriving bin_io]
+type ressStamp = unit ressInfo [@@deriving bin_io]
 type info =
   { ressInfo : (Fspath.t * int64) ressInfo;
     finfo : string }

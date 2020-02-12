@@ -236,7 +236,7 @@ let createDir fspath path props =
 (*                              FINGERPRINTS                                 *)
 (*****************************************************************************)
 
-type fullfingerprint = Fingerprint.t * Fingerprint.t
+type fullfingerprint = Fingerprint.t * Fingerprint.t [@@deriving bin_io]
 
 let fingerprint fspath path info =
   (Fingerprint.file fspath path,

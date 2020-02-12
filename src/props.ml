@@ -15,11 +15,12 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 let debug = Util.debug "props"
 
 module type S = sig
-  type t
+  type t [@@deriving bin_io]
   val dummy : t
   val hash : t -> int -> int
   val similar : t -> t -> bool
@@ -64,7 +65,7 @@ end = struct
 
 (* NOTE: IF YOU CHANGE TYPE "PERM", THE ARCHIVE FORMAT CHANGES; INCREMENT    *)
 (* "UPDATE.ARCHIVEFORMAT"                                                    *)
-type t = int * int
+type t = int * int [@@deriving bin_io]
 
 (* This allows us to export NullPerm while keeping the type perm abstract    *)
 let dummy = (0, 0)
@@ -297,6 +298,7 @@ type t =
     IdIgnored
   | IdNamed of string
   | IdNumeric of int
+[@@deriving bin_io]
 
 let dummy = IdIgnored
 
@@ -439,7 +441,7 @@ let sync =
     "When this flag is set to \\verb|true|, \
      file modification times (but not directory modtimes) are propagated."
 
-type t = Synced of float | NotSynced of float
+type t = Synced of float | NotSynced of float [@@deriving bin_io]
 
 let dummy = NotSynced 0.
 
@@ -605,7 +607,7 @@ end
 
 module TypeCreator : S = struct
 
-type t = string option
+type t = string option [@@deriving bin_io]
 
 let dummy = None
 
@@ -663,7 +665,7 @@ type t =
     gid : Gid.t;
     time : Time.t;
     typeCreator : TypeCreator.t;
-    length : Uutil.Filesize.t }
+    length : Uutil.Filesize.t } [@@deriving bin_io]
 
 let template perm =
   { perm = perm; uid = Uid.dummy; gid = Gid.dummy;

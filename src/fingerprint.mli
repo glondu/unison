@@ -1,7 +1,7 @@
 (* Unison file synchronizer: src/fingerprint.mli *)
 (* Copyright 1999-2020, Benjamin C. Pierce (see COPYING for details) *)
 
-type t
+type t [@@deriving bin_io]
 
 (* Os.safeFingerprint should usually be used rather than these functions *)
 val file : Fspath.t -> Path.local -> t

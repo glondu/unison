@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
+
 let debug = Trace.debug "fpcache"
 
 (* In-memory cache *)
@@ -33,6 +35,9 @@ let tbl = PathTbl.create 101
 
 type entry =
   int * string * (Props.t * Os.fullfingerprint * Fileinfo.stamp * Osx.ressStamp)
+[@@deriving bin_io]
+
+type entry_list = entry list [@@deriving bin_io]
 
 type state =
   { oc : out_channel;
