@@ -3,6 +3,7 @@
 
 type t =
   (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+[@@deriving bin_io]
 
 val create : int -> t
 
@@ -25,3 +26,10 @@ val prefix : t -> t -> int -> bool
 val marshal : 'a -> Marshal.extern_flags list -> t
 
 val unmarshal : t -> int -> 'a
+
+
+module Int32 : sig
+  type t =
+    (int32, Bigarray.int32_elt, Bigarray.c_layout) Bigarray.Array1.t
+  [@@deriving bin_io]
+end

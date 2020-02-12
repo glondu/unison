@@ -15,9 +15,11 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 open Bigarray
 
-type t = (char, int8_unsigned_elt, c_layout) Array1.t
+type bigstring = Bin_prot.Common.buf
+type t = bigstring [@@deriving bin_io]
 
 let length = Bigarray.Array1.dim
 
@@ -101,3 +103,33 @@ external marshal : 'a -> Marshal.extern_flags list -> t
 
 external unmarshal : t -> int -> 'a
   = "ml_unmarshal_from_bigarray"
+
+
+module Int32 = struct
+
+  type t = (int32, Bigarray.int32_elt, Bigarray.c_layout) Bigarray.Array1.t
+
+  open Bin_prot
+  open Std
+
+  module Spec = struct
+    type t = (int32, Bigarray.int32_elt, Bigarray.c_layout) Bigarray.Array1.t
+    type el = int32 [@@deriving bin_io]
+    let caller_identity = Shape.Uuid.of_string "cddae2a9-4b0f-444d-a165-8a49e7e02fd4"
+    let module_name = Some "Bytearray.Int32"
+    let length = Bigarray.Array1.dim
+    let iter xs ~f =
+      for i = 0 to length xs - 1 do
+        f xs.{i}
+      done
+    let init ~len ~next =
+      let res = Bigarray.Array1.create Bigarray.int32 Bigarray.c_layout len in
+      for i = 0 to len - 1 do
+        res.{i} <- next ()
+      done;
+      res
+  end
+
+  include Utils.Make_iterable_binable (Spec)
+
+end

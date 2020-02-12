@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
+open Bin_prot.Std
 
 (* rsync compression algorithm
 
@@ -329,9 +330,8 @@ struct
     { blockSize : int;
       blockCount : int;
       checksumSize : int;
-      weakChecksum :
-        (int32, Bigarray.int32_elt, Bigarray.c_layout) Bigarray.Array1.t;
-      strongChecksum : Bytearray.t }
+      weakChecksum : Bytearray.Int32.t;
+      strongChecksum : Bytearray.t } [@@deriving bin_io]
 
   (*** PREPROCESS ***)
 
