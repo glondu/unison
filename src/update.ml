@@ -546,10 +546,10 @@ let dumpArchiveOnRoot : Common.root -> unit -> unit Lwt.t =
 
 (* Stamp for marking unchange directories *)
 let dirStampKey : Props.dirChangedStamp Proplist.key =
-  Proplist.register "unchanged directory stamp"
+  Proplist.register "unchanged directory stamp" Props.bin_dirChangedStamp
 
 (* Property containing a description of the archive case sensitivity mode *)
-let caseKey : string Proplist.key = Proplist.register "case mode"
+let caseKey : string Proplist.key = Proplist.register "case mode" bin_string
 
 (* Turn a case sensitive archive into a case insensitive archive.
    Directory children are resorted and duplicates are removed.
@@ -1906,9 +1906,11 @@ let updatePredicates =
    ("ignore", Globals.ignorePred); ("ignorenot", Globals.ignorenotPred);
    ("follow", Path.followPred)]
 
+type predKey_typ = (string * string list) list [@@deriving bin_io]
+
 let predKey : (string * string list) list Proplist.key =
-  Proplist.register "update predicates"
-let rsrcKey : bool Proplist.key = Proplist.register "rsrc pref"
+  Proplist.register "update predicates" bin_predKey_typ
+let rsrcKey : bool Proplist.key = Proplist.register "rsrc pref" bin_bool
 
 let checkNoUpdatePredicateChange thisRoot =
   let props = getArchiveProps thisRoot in

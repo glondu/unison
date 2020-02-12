@@ -18,13 +18,13 @@
 type 'a key = string
 type t = Obj.t Util.StringMap.t
 
-let names = ref Util.StringSet.empty
+let names = ref Util.StringMap.empty
 
-let register nm =
-  if (Util.StringSet.mem nm !names) then
+let register nm bin =
+  if (Util.StringMap.mem nm !names) then
     raise (Util.Fatal
             (Format.sprintf "Property lists: %s already registered!" nm));
-  names := Util.StringSet.add nm !names;
+  names := Util.StringMap.add nm (Obj.repr bin) !names;
   nm
 
 let empty = Util.StringMap.empty
@@ -34,3 +34,42 @@ let mem = Util.StringMap.mem
 let find (k : 'a key) m : 'a = Obj.obj (Util.StringMap.find k m)
 
 let add (k : 'a key) (v : 'a) m = Util.StringMap.add k (Obj.repr v) m
+
+let find_bin (k : 'a key) : 'a Bin_prot.Type_class.t =
+  match Util.StringMap.find_opt k !names with
+  | Some x -> Obj.obj x
+  | None ->
+     raise (Util.Fatal (Format.sprintf "Property lists: %s not yet registered!" k))
+
+open Bin_prot
+open Std
+
+module Proplist_spec = struct
+  type t = Obj.t Util.StringMap.t
+  type bigstring = Common.buf
+  type el = string * bigstring [@@deriving bin_io]
+  let caller_identity = Shape.Uuid.of_string "dd331c89-17ad-4027-9a31-c6ea04d738f4"
+  let module_name = Some "Proplist"
+  let length = Util.StringMap.cardinal
+  let iter xs ~f =
+    Util.StringMap.iter
+      (fun k obj ->
+        let bin = find_bin k in
+        let v = Obj.obj obj in
+        let size = bin.writer.size v in
+        let buf = Common.create_buf size in
+        ignore (bin.writer.write buf ~pos:0 v);
+        f (k, buf)
+      ) xs
+  let init ~len ~next =
+    let res = ref Util.StringMap.empty in
+    for i = 1 to len do
+      let k, buf = next () in
+      let bin = find_bin k in
+      let v = bin.reader.read buf ~pos_ref:(ref 0) in
+      res := Util.StringMap.add k (Obj.repr v) !res
+    done;
+    !res
+end
+
+include Utils.Make_iterable_binable (Proplist_spec)
