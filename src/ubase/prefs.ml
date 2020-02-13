@@ -7,7 +7,7 @@ let debug = Util.debug "prefs"
 
 type 'a t =
   { mutable value : 'a; defaultValue : 'a; mutable names : string list;
-    mutable setInProfile : bool }
+    mutable setInProfile : bool } [@@deriving bin_io]
 
 let read p = p.value
 
@@ -80,10 +80,10 @@ let resetToDefaults () =
 (* created, a dumper (marshaler) and a loader (parser) are added to the list *)
 (* kept here...                                                              *)
 
-type dumpedPrefs = (string * bool * string) list [@@deriving bin_io]
+type dumpedPrefs = (string * bool * Bytearray.t) list [@@deriving bin_io]
 
-let dumpers = ref ([] : (string * bool * (unit->string)) list)
-let loaders = ref (Util.StringMap.empty : (string->unit) Util.StringMap.t)
+let dumpers = ref ([] : (string * bool * (unit->Bytearray.t)) list)
+let loaders = ref (Util.StringMap.empty : (Bytearray.t->unit) Util.StringMap.t)
 
 let adddumper name optional f =
   dumpers := (name,optional,f) :: !dumpers
@@ -181,50 +181,73 @@ let registerPref name typ pspec doc fulldoc =
   if doc = "" || doc.[0] <> '*' then
     prefType := Util.StringMap.add name typ !prefType
 
-let createPrefInternal name typ local default doc fulldoc printer parsefn =
+type 'a prefInternal = 'a * string list [@@deriving bin_io]
+
+let createPrefInternal name typ local default doc fulldoc printer parsefn bin =
+  let bin = bin_prefInternal bin in
   let newCell = rawPref default name in
   registerPref name typ (parsefn newCell) doc fulldoc;
   adddumper name local
-    (fun () -> Marshal.to_string (newCell.value, newCell.names) []);
+    (fun () ->
+      let open Bin_prot in
+      let v = newCell.value, newCell.names in
+      let size = bin.writer.size v in
+      let buf = Common.create_buf size in
+      ignore (bin.writer.write ~pos:0 buf v);
+      buf);
   addprinter name (fun () -> printer newCell.value);
   addresetter
     (fun () ->
        newCell.setInProfile <- false; newCell.value <- newCell.defaultValue);
   addloader name
     (fun s ->
-       let (value, names) = Marshal.from_string s 0 in
+       let value, names = bin.reader.read s ~pos_ref:(ref 0) in
        newCell.value <- value);
   newCell
 
-let create name ?(local=false) default doc fulldoc intern printer =
+let create name ?(local=false) default doc fulldoc intern printer bin =
   createPrefInternal name `CUSTOM local default doc fulldoc printer
     (fun cell -> Uarg.String (fun s -> set cell (intern (read cell) s)))
+    bin
 
 let createBool name ?(local=false) default doc fulldoc =
   let doc = if default then doc ^ " (default true)" else doc in
   createPrefInternal name `BOOL local default doc fulldoc
     (fun v -> [if v then "true" else "false"])
     (fun cell -> Uarg.Bool (fun b -> set cell b))
+    bin_bool
 
 let createInt name ?(local=false) default doc fulldoc =
   createPrefInternal name `INT local default doc fulldoc
     (fun v -> [string_of_int v])
     (fun cell -> Uarg.Int (fun i -> set cell i))
+    bin_int
 
 let createString name ?(local=false) default doc fulldoc =
   createPrefInternal name `STRING local default doc fulldoc
     (fun v -> [v])
     (fun cell -> Uarg.String (fun s -> set cell s))
+    bin_string
 
 let createFspath name ?(local=false) default doc fulldoc =
   createPrefInternal name `STRING local default doc fulldoc
     (fun v -> [System.fspathToString v])
     (fun cell -> Uarg.String (fun s -> set cell (System.fspathFromString s)))
+    System.bin_fspath
+
+type stringList = string list [@@deriving bin_io]
 
 let createStringList name ?(local=false) doc fulldoc =
   createPrefInternal name `STRING_LIST local [] doc fulldoc
     (fun v -> v)
     (fun cell -> Uarg.String (fun s -> set cell (s:: read cell)))
+    bin_stringList
+
+type boolWithDefault =
+  [ `True
+  | `False
+  | `Default ]
+[@@deriving bin_io]
 
 let createBoolWithDefault name ?(local=false) doc fulldoc =
   createPrefInternal name `BOOLDEF local `Default doc fulldoc
@@ -242,6 +265,7 @@ let createBoolWithDefault name ?(local=false) doc fulldoc =
               | _                  -> `False
             in
             set cell v))
+    bin_boolWithDefault
 
 (*****************************************************************************)
 (*                     Preferences file parsing                              *)

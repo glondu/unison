@@ -73,6 +73,7 @@ val create :
      -> ('a->string->'a)        (* interning function for preference values
                                    (1st arg is old value of preference) *)
      -> ('a -> string list)     (* printing function for preference values *)
+     -> 'a Bin_prot.Type_class.t
      -> 'a t                    (*   -> new preference value *)
 
 (* Create an alternate name for a preference (the new name will not appear   *)
@@ -156,3 +157,7 @@ val list : unit -> string list
 
 val printFullDocs : unit -> unit
 val dumpPrefsToStderr : unit -> unit
+
+(* ------------------------------------------------------------------------- *)
+
+type stringList = string list [@@deriving bin_io]

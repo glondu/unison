@@ -17,7 +17,7 @@
 
 module type Core = sig
 
-type fspath
+type fspath [@@deriving bin_io]
 type dir_handle = { readdir : unit -> string; closedir : unit -> unit }
 
 val symlink : string -> fspath -> unit

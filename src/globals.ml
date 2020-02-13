@@ -149,6 +149,8 @@ let allHostsIter f =
 
 let allHostsMap f = Safelist.map f (replicaHostnames())
 
+type pathList = Path.t list [@@deriving bin_io]
+
 let paths =
   Prefs.create "path" []
     "path to synchronize"
@@ -161,6 +163,7 @@ let paths =
      ^ "are not regular expressions.")
     (fun oldpaths string -> Safelist.append oldpaths [Path.fromString string])
     (fun l -> Safelist.map Path.toString l)
+    bin_pathList
 
 (* FIX: this does weird things in case-insensitive mode... *)
 let globPath lr p =

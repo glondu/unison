@@ -17,7 +17,7 @@
 
 module System = System_impl.Fs
 
-type fspath = Fspath.t
+type fspath = Fspath.t [@@deriving bin_io]
 type dir_handle = System.dir_handle
                 = { readdir : unit -> string; closedir : unit -> unit }
 

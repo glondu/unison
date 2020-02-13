@@ -15,7 +15,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *)
 
-type fspath = string
+open Bin_prot.Std
+
+type fspath = string [@@deriving bin_io]
 
 let fspathFromString f = f
 let fspathToPrintString f = f
