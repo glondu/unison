@@ -53,8 +53,8 @@ let ignoreArchives =
    for this file on the next sync. *)
 (*FIX: consider changing the way case-sensitivity mode is stored in
   the archive *)
-(*FIX: we should use only one Marshal.from_channel *)
-let archiveFormat = 22
+(*FIX: we should use only one bin_read_X *)
+let archiveFormat = 23
 
 module NameMap = MyMap.Make (Name)
 
@@ -301,10 +301,12 @@ let verboseArchiveName thisRoot =
   Printf.sprintf "Archive for root %s synchronizing roots %s"
     thisRoot (Prefs.read rootsName)
 
+type archivePayload = archive * int * string [@@deriving bin_io]
+
 (* Load in the archive in [fspath]; check that archiveFormat (first line)
    and roots (second line) match skip the third line (time stamp), and read
    in the archive *)
-let loadArchiveLocal fspath (thisRoot: string) :
+let loadArchiveLocalInner fspath (thisRoot: string) :
     (archive * int * string * Proplist.t) option =
   debug (fun() ->
     Util.msg "Loading archive from %s\n" (System.fspathToDebugString fspath));
@@ -337,28 +339,41 @@ let loadArchiveLocal fspath (thisRoot: string) :
         let _ = input_line c in
         (* Load the datastructure *)
         try
+          let file_size = in_channel_length c in
+          let buf =
+            Unix.map_file (Unix.descr_of_in_channel c)
+            Bigarray.char Bigarray.c_layout false
+            [| file_size |] |> Bigarray.array1_of_genarray
+          in
+          let pos_ref = ref (pos_in c) in
           let ((archive, hash, magic) : archive * int * string) =
-            Marshal.from_channel c in
+            bin_read_archivePayload ~pos_ref buf
+          in
           let properties =
-            try
-              ignore (input_char c); (* Marker *)
-              Marshal.from_channel c
-            with End_of_file ->
+            if !pos_ref < file_size then
+              Proplist.bin_read_t ~pos_ref buf
+            else
               Proplist.empty
           in
           close_in c;
           Some (archive, hash, magic, properties)
-        with Failure s -> raise (Util.Fatal (Printf.sprintf
+        with Bin_prot.Common.Read_error (s, _) -> raise (Util.Fatal (Printf.sprintf
            "Archive file seems damaged (%s): \
-            throw away archives on both machines and try again" s))
+            throw away archives on both machines and try again"
+           (Bin_prot.Common.ReadError.to_string s)))
     else
       (debug (fun() ->
          Util.msg "Archive %s not found\n"
            (System.fspathToDebugString fspath));
       None))
 
+let loadArchiveLocal fspath thisRoot =
+  let r = loadArchiveLocalInner fspath thisRoot in
+  Gc.full_major (); (* force unmap *)
+  r
+
 (* Inverse to loadArchiveLocal *)
-let storeArchiveLocal fspath thisRoot archive hash magic properties =
+let storeArchiveLocalInner fspath thisRoot archive hash magic properties =
  debug (fun() ->
     Util.msg "Saving archive in %s\n" (System.fspathToDebugString fspath));
  Util.convertUnixErrorsToFatal "saving archive" (fun () ->
@@ -374,11 +389,24 @@ let storeArchiveLocal fspath thisRoot archive hash magic properties =
    output_string c (Printf.sprintf "Written at %s - %s mode\n"
                       (Util.time2string (Util.time()))
                       ((Case.ops())#modeDesc));
-   Marshal.to_channel c (archive, hash, magic) [Marshal.No_sharing];
-   output_char c '\000'; (* Marker that indicates that the archive
-                            is followed by a property list *)
-   Marshal.to_channel c properties [Marshal.No_sharing];
-   close_out c)
+   let pos = pos_out c in
+   close_out c;
+   let c = Unix.openfile (System.fspathToString fspath) [Unix.O_RDWR] 0o600 in
+   let archivePayload = (archive, hash, magic) in
+   let archivePayloadSize = bin_size_archivePayload archivePayload in
+   let propertiesSize = Proplist.bin_size_t properties in
+   let buf =
+     Unix.map_file c Bigarray.char Bigarray.c_layout true
+       [| pos + archivePayloadSize + propertiesSize |]
+     |> Bigarray.array1_of_genarray
+   in
+   let pos = bin_write_archivePayload buf ~pos archivePayload in
+   let _ = Proplist.bin_write_t buf ~pos properties in
+   Unix.close c)
+
+let storeArchiveLocal fspath thisRoot archive hash magic properties =
+  storeArchiveLocalInner fspath thisRoot archive hash magic properties;
+  Gc.full_major () (* force unmap *)
 
 (* Remove the archieve under the root path [fspath] with archiveVersion [v] *)
 let removeArchiveLocal ((fspath: Fspath.t), (v: archiveVersion)): unit Lwt.t =
