@@ -98,12 +98,6 @@ let blit_to_bytes a i s j l =
   then invalid_arg "Bytearray.blit_to_bytes"
   else unsafe_blit_to_bytes a i s j l
 
-external marshal : 'a -> Marshal.extern_flags list -> t
-  = "ml_marshal_to_bigarray"
-
-external unmarshal : t -> int -> 'a
-  = "ml_unmarshal_from_bigarray"
-
 
 module Int32 = struct
 

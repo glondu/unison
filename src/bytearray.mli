@@ -23,10 +23,6 @@ val blit_to_bytes : t -> int -> bytes -> int -> int -> unit
 
 val prefix : t -> t -> int -> bool
 
-val marshal : 'a -> Marshal.extern_flags list -> t
-
-val unmarshal : t -> int -> 'a
-
 
 module Int32 : sig
   type t =
